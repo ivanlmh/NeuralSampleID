@@ -134,6 +134,7 @@ class NeuralSampleIDDataset(Dataset):
 
         if train:
             # self.filenames = load_index(cfg, path, mode="train")
+            self.filenames = load_sample100_index(cfg, path, mode="train")
         else:
             self.filenames = load_sample100_index(cfg, path, mode="valid")
 
@@ -178,7 +179,7 @@ class NeuralSampleIDDataset(Dataset):
         
         #   TODO: 
         if self.train:
-            continue        
+            return audio_cut 
         #   For validation / test, output consecutive (overlapping) frames
         else:
             return audio_cut
