@@ -115,3 +115,74 @@ class NeuralfpDataset(Dataset):
     
     def __len__(self):
         return len(self.filenames)
+    
+
+
+# create class for NeuralSampleIDDataset
+class NeuralSampleIDDataset(Dataset):
+    def __init__(self, cfg, path, transform=None, train=False):
+        self.path = path
+        self.transform = transform
+        self.train = train
+        self.norm = cfg['norm']
+        self.offset = cfg['offset']
+        self.sample_rate = cfg['fs']
+        self.dur = cfg['dur']
+        self.n_frames = cfg['n_frames']
+        self.silence = cfg['silence']
+        self.error_threshold = cfg['error_threshold']
+
+        if train:
+            # self.filenames = load_index(cfg, path, mode="train")
+        else:
+            self.filenames = load_sample100_index(cfg, path, mode="valid")
+
+        print(f"Loaded {len(self.filenames)} files from {path}")
+        self.ignore_idx = []
+        self.error_counts = {}
+        
+    def __getitem__(self, idx):
+        if idx in self.ignore_idx:
+            return self[idx + 1]
+        
+        datapath = self.filenames[str(idx)]
+        try:
+            # with warnings.catch_warnings():
+            #     warnings.simplefilter("ignore")
+            audio, sr = torchaudio.load(datapath)
+
+        except Exception:
+            print("Error loading:" + self.filenames[str(idx)])
+            self.error_counts[idx] = self.error_counts.get(idx, 0) + 1
+            if self.error_counts[idx] > self.error_threshold:
+                self.ignore_idx.append(idx)
+            return self[idx+1]
+
+        # audio mono shape is (1, n_samples)
+        audio_mono = audio.mean(dim=0)
+        
+        resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
+        audio_resampled = resampler(audio_mono)
+
+        # csv columns are sample_id,original_track_id,sample_track_id,t_original,t_sample,n_repetitions,sample_type,interpolation,comments
+        # open csv and get t_sample
+        csv_path = os.path.join(self.path, 'samples.csv')
+        with open(csv_path) as f:
+            lines = f.readlines()
+            t_sample = int(lines[idx].split(',')[4])
+
+        clip_frames = int(self.sample_rate*self.dur)
+        
+        audio_cut = audio_resampled[:, t_sample:t_sample+clip_frames]
+    
+        
+        #   TODO: 
+        if self.train:
+            continue        
+        #   For validation / test, output consecutive (overlapping) frames
+        else:
+            return audio_cut
+            # return audio_resampled
+    
+    def __len__(self):
+        return len(self.filenames)

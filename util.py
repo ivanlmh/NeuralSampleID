@@ -8,6 +8,7 @@ import shutil
 import yaml
 from prettytable import PrettyTable
 
+
 class DummyScaler:
     def scale(self, loss):
         return loss
@@ -19,72 +20,143 @@ class DummyScaler:
         pass
 
 
+def load_index(cfg, data_dir, ext=["wav", "mp3"], shuffle_dataset=True, mode="train"):
 
-def load_index(cfg, data_dir, ext=['wav','mp3'], shuffle_dataset=True, mode="train"):
-
-    if data_dir.endswith('.json'):
+    if data_dir.endswith(".json"):
         print(f"=>Loading indices from index file {data_dir}")
-        with open(data_dir, 'r') as fp:
+        with open(data_dir, "r") as fp:
             dataset = json.load(fp)
         return dataset
-    
+
     print(f"=>Loading indices from {data_dir}")
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Directory {data_dir} not found")
-    
-    json_path = os.path.join(cfg['data_dir'], data_dir.split('/')[-1] + ".json")
+
+    json_path = os.path.join(cfg["data_dir"], data_dir.split("/")[-1] + ".json")
     if os.path.exists(json_path):
         print(f"Loading indices from {json_path}")
-        with open(json_path, 'r') as fp:
+        with open(json_path, "r") as fp:
             dataset = json.load(fp)
         return dataset
-    
-    fpaths = glob.glob(os.path.join(data_dir,'**/*.*'), recursive=True)
-    fpaths = [p for p in fpaths if p.split('.')[-1] in ext]
+
+    fpaths = glob.glob(os.path.join(data_dir, "**/*.*"), recursive=True)
+    fpaths = [p for p in fpaths if p.split(".")[-1] in ext]
     dataset_size = len(fpaths)
     indices = list(range(dataset_size))
-    if shuffle_dataset :
+    if shuffle_dataset:
         np.random.seed(42)
         np.random.shuffle(indices)
     if mode == "train":
-        size = cfg['train_sz']
+        size = cfg["train_sz"]
     else:
-        size = cfg['val_sz']
-    dataset = {str(i):fpaths[ix] for i,ix in enumerate(indices[:size])}
+        size = cfg["val_sz"]
+    # returns a dictionary, the key is the index and the value is the file path
+    dataset = {str(i): fpaths[ix] for i, ix in enumerate(indices[:size])}
 
-    with open(json_path, 'w') as fp:
+    with open(json_path, "w") as fp:
         json.dump(dataset, fp)
 
     return dataset
 
-def load_augmentation_index(data_dir, splits, json_path=None, ext=['wav','mp3'], shuffle_dataset=True):
-    dataset = {'train' : [], 'test' : [], 'validate': []}
+
+def load_sample100_index(
+    cfg, data_dir, ext=["mp3"], shuffle_dataset=True
+):  # , mode="train"):
+    # verify data_dir is called sample_100, has an audio subdirectory and a samples.csv file
+    if not os.path.exists(data_dir):
+        raise FileNotFoundError(f"Directory {data_dir} not found")
+    if not os.path.exists(os.path.join(data_dir, "audio")):
+        raise FileNotFoundError(
+            f"Directory {data_dir} does not contain an audio subdirectory"
+        )
+
+    if data_dir.endswith(".json"):
+        print(f"=>Loading indices from index file {data_dir}")
+        with open(data_dir, "r") as fp:
+            dataset = json.load(fp)
+        return dataset
+
+    json_path = os.path.join(cfg["data_dir"], data_dir.split("/")[-1] + ".json")
+    if os.path.exists(json_path):
+        print(f"Loading indices from {json_path}")
+        with open(json_path, "r") as fp:
+            dataset = json.load(fp)
+        return dataset
+
+    print(f"=>Loading indices from {data_dir}")
+
+    if not os.path.exists(os.path.join(data_dir, "samples.csv")):
+        raise FileNotFoundError(
+            f"Directory {data_dir} does not contain a samples.csv file"
+        )
+
+    # csv columns are sample_id,original_track_id,sample_track_id,t_original,t_sample,n_repetitions,sample_type,interpolation,comments
+    # fpaths are data_dir/audio/{sample_track_id}.mp3
+    # open csv
+    with open(os.path.join(data_dir, "samples.csv"), "r") as f:
+        lines = f.readlines()
+        fpaths = [
+            os.path.join(data_dir, "audio", line.split(",")[2] + ".mp3")
+            for line in lines[1:]
+        ]
+    # assert file exists
+    for fpath in fpaths:
+        if not os.path.exists(fpath):
+            raise FileNotFoundError(f"File {fpath} does not exist")
+
+    dataset_size = len(fpaths)
+    indices = list(range(dataset_size))
+    # if shuffle_dataset:
+    #     np.random.seed(42)
+    #     np.random.shuffle(indices)
+    if mode == "train":
+        size = cfg["train_sz"]
+    else:
+        size = cfg["val_sz"]
+    # returns a dictionary, the key is the index and the value is the file path
+    # the problem is that the indices are always cut off at the same point
+    dataset = {str(i): fpaths[i] for i in indices[:size]}
+
+    with open(json_path, "w") as fp:
+        json.dump(dataset, fp)
+
+    return dataset
+
+
+def load_augmentation_index(
+    data_dir, splits, json_path=None, ext=["wav", "mp3"], shuffle_dataset=True
+):
+    dataset = {"train": [], "test": [], "validate": []}
     if json_path is None:
-        json_path = os.path.join(data_dir, data_dir.split('/')[-1] + ".json")
+        json_path = os.path.join(data_dir, data_dir.split("/")[-1] + ".json")
     if not os.path.exists(json_path):
-        fpaths = glob.glob(os.path.join(data_dir,'**/*.*'), recursive=True)
-        fpaths = [p for p in fpaths if p.split('.')[-1] in ext]
-        dataset_size = len(fpaths)   
+        fpaths = glob.glob(os.path.join(data_dir, "**/*.*"), recursive=True)
+        fpaths = [p for p in fpaths if p.split(".")[-1] in ext]
+        dataset_size = len(fpaths)
         indices = list(range(dataset_size))
-        if shuffle_dataset :
+        if shuffle_dataset:
             np.random.seed(42)
             np.random.shuffle(indices)
         if type(splits) == list or type(splits) == np.ndarray:
-            splits = [int(splits[ix]*dataset_size) for ix in range(len(splits))]
-            train_idxs, valid_idxs, test_idxs = indices[:splits[0]], indices[splits[0]: splits[0] + splits[1]], indices[splits[1]:]
-            dataset['validate'] = [fpaths[ix] for ix in valid_idxs]
+            splits = [int(splits[ix] * dataset_size) for ix in range(len(splits))]
+            train_idxs, valid_idxs, test_idxs = (
+                indices[: splits[0]],
+                indices[splits[0] : splits[0] + splits[1]],
+                indices[splits[1] :],
+            )
+            dataset["validate"] = [fpaths[ix] for ix in valid_idxs]
         else:
-            splits = int(splits*dataset_size)
+            splits = int(splits * dataset_size)
             train_idxs, test_idxs = indices[:splits], indices[splits:]
-        
-        dataset['train'] = [fpaths[ix] for ix in train_idxs]
-        dataset['test'] = [fpaths[ix] for ix in test_idxs]
 
-        with open(json_path, 'w') as fp:
+        dataset["train"] = [fpaths[ix] for ix in train_idxs]
+        dataset["test"] = [fpaths[ix] for ix in test_idxs]
+
+        with open(json_path, "w") as fp:
             json.dump(dataset, fp)
-    
+
     else:
-        with open(json_path, 'r') as fp:
+        with open(json_path, "r") as fp:
             dataset = json.load(fp)
 
     return dataset
@@ -95,20 +167,24 @@ def get_frames(y, frame_length, hop_length):
     frames = y.unfold(0, size=frame_length, step=hop_length)
     return frames
 
+
 def qtile_normalize(y, q, eps=1e-8):
-    return y / (eps + torch.quantile(y.abs(),q=q))
+    return y / (eps + torch.quantile(y.abs(), q=q))
+
 
 def qtile_norm(y, q, eps=1e-8):
-    return eps + torch.quantile(y.abs(),q=q)
+    return eps + torch.quantile(y.abs(), q=q)
 
 
 def query_len_from_seconds(seconds, overlap, dur):
-    hop = dur*(1-overlap)
-    return int((seconds-dur)/hop + 1)
+    hop = dur * (1 - overlap)
+    return int((seconds - dur) / hop + 1)
+
 
 def seconds_from_query_len(query_len, overlap, dur):
-    hop = dur*(1-overlap)
-    return int((query_len-1)*hop + dur)
+    hop = dur * (1 - overlap)
+    return int((query_len - 1) * hop + dur)
+
 
 def load_ckp(checkpoint_fpath, model, optimizer, scheduler):
     checkpoint = torch.load(checkpoint_fpath)
@@ -116,42 +192,52 @@ def load_ckp(checkpoint_fpath, model, optimizer, scheduler):
     # if 'module' in list(checkpoint['state_dict'].keys())[0]:
     #     print("Loading model with dataparallel...")
     #     checkpoint = {key.replace('module.', ''): value for key, value in checkpoint.items()}
-    model.load_state_dict(checkpoint['state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
-    scheduler.load_state_dict(checkpoint['scheduler'])
-    return model, optimizer, scheduler, checkpoint['epoch'], checkpoint['loss'], checkpoint['valid_acc']
+    model.load_state_dict(checkpoint["state_dict"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    scheduler.load_state_dict(checkpoint["scheduler"])
+    return (
+        model,
+        optimizer,
+        scheduler,
+        checkpoint["epoch"],
+        checkpoint["loss"],
+        checkpoint["valid_acc"],
+    )
 
-def save_ckp(state,model_name,model_folder,text):
-    if not os.path.exists(model_folder): 
+
+def save_ckp(state, model_name, model_folder, text):
+    if not os.path.exists(model_folder):
         print("Creating checkpoint directory...")
         os.mkdir(model_folder)
     torch.save(state, "{}/model_{}_{}.pth".format(model_folder, model_name, text))
 
+
 def load_config(config_path):
-    with open(config_path, 'r') as fp:
+    with open(config_path, "r") as fp:
         config = yaml.safe_load(fp)
     return config
 
+
 def override(config_val, arg):
-    return arg if arg is not None else config_val 
+    return arg if arg is not None else config_val
+
 
 def create_fp_dir(resume=None, ckp=None, epoch=1, train=True):
     if train:
-        parent_dir = 'logs/emb/valid'
+        parent_dir = "logs/emb/valid"
     else:
-        parent_dir = 'logs/emb/test'
+        parent_dir = "logs/emb/test"
 
     if not os.path.exists(parent_dir):
         os.makedirs(parent_dir)
     if resume is not None:
-        ckp_name = resume.split('/')[-1].split('.pt')[0]
+        ckp_name = resume.split("/")[-1].split(".pt")[0]
     else:
-        ckp_name = f'model_{ckp}_epoch_{epoch}'
+        ckp_name = f"model_{ckp}_epoch_{epoch}"
     fp_dir = os.path.join(parent_dir, ckp_name)
     if not os.path.exists(fp_dir):
         os.mkdir(fp_dir)
     return fp_dir
-
 
 
 def create_train_set(data_dir, dest, size=10000):
@@ -159,40 +245,43 @@ def create_train_set(data_dir, dest, size=10000):
         os.mkdir(dest)
         print(data_dir)
         print(dest)
-    for ix,fname in enumerate(os.listdir(data_dir)):
+    for ix, fname in enumerate(os.listdir(data_dir)):
         fpath = os.path.join(data_dir, fname)
-        if ix <= size and fpath.endswith('mp3'):
-            shutil.move(fpath,dest)
+        if ix <= size and fpath.endswith("mp3"):
+            shutil.move(fpath, dest)
             print(ix)
         if len(os.listdir(dest)) >= size:
             return dest
-    
+
     return dest
 
+
 def create_downstream_set(data_dir, size=5000):
-    src = os.path.join(data_dir, f'fma_downstream')
+    src = os.path.join(data_dir, f"fma_downstream")
     dest = data_dir
     # if not os.path.exists(dest):
-    #     os.mkdir(dest)   
+    #     os.mkdir(dest)
     # if len(os.listdir(dest)) >= size:
     #     return dest
-    for ix,fname in enumerate(os.listdir(src)):
+    for ix, fname in enumerate(os.listdir(src)):
         fpath = os.path.join(src, fname)
-        if not fpath.endswith('mp3'):
+        if not fpath.endswith("mp3"):
             continue
         # if ix < size:
         if len(os.listdir(src)) > 500:
-            shutil.move(fpath,dest)
+            shutil.move(fpath, dest)
 
     return dest
 
+
 def preprocess_aug_set_sr(data_dir, sr=22050):
-    for fpath in glob.iglob(os.path.join(data_dir,'**/*.wav'), recursive=True):
+    for fpath in glob.iglob(os.path.join(data_dir, "**/*.wav"), recursive=True):
         y, sr = sf.read(fpath)
         print(sr)
         break
         # sf.write(fpath, data=y, samplerate=sr)
     return
+
 
 def count_parameters(model, encoder):
     table = PrettyTable(["Modules", "Parameters"])
@@ -206,9 +295,10 @@ def count_parameters(model, encoder):
     print(table)
     print(f"Total Trainable Params: {total_params}")
     # Write table in text file
-    with open(f'model_summary_{encoder}.txt', 'w') as f:
+    with open(f"model_summary_{encoder}.txt", "w") as f:
         f.write(str(table))
     return total_params
+
 
 def calculate_output_sparsity(output):
     total_elements = torch.numel(output)
@@ -218,10 +308,12 @@ def calculate_output_sparsity(output):
     return sparsity
 
     # Get paths of files not in the index
+
+
 def get_test_index(data_dir):
     train_idx = load_index(data_dir)
-    all_file_list = glob.glob(os.path.join(data_dir,'**/*.mp3'), recursive=True)
-    print(f'Number of files in {data_dir}: {len(all_file_list)}')
+    all_file_list = glob.glob(os.path.join(data_dir, "**/*.mp3"), recursive=True)
+    print(f"Number of files in {data_dir}: {len(all_file_list)}")
     # test_idx = {str(i):f for i,f in enumerate(all_file_list) if f not in train_idx.values()}
     idx = 0
     test_idx = {}
