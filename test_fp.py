@@ -64,7 +64,7 @@ parser.add_argument("--k", default=3, type=int)
 parser.add_argument("--test_ids", default="1000", type=str)
 parser.add_argument("--sample_id", action="store_true", default=False)
 
-device = torch.device("cuda" if torch.cuda.is_available else "cpu")
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
 def create_table(
