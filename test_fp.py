@@ -285,11 +285,13 @@ def main():
             ckp = os.path.join(model_folder, f"model_{ckp_name}_{str(epoch)}.pth")
             if os.path.isfile(ckp):
                 print("=> loading checkpoint '{}'".format(ckp))
-                checkpoint = torch.load(ckp)
+                if torch.cuda.is_available():
+                    checkpoint = torch.load(ckp)
+                else:
+                    checkpoint = torch.load(ckp, map_location=torch.device("cpu"))
                 # Check for DataParallel
-                if (
-                    "module" in list(checkpoint["state_dict"].keys())[0]
-                    and torch.cuda.device_count() == 1
+                if "module" in list(checkpoint["state_dict"].keys())[0] and (
+                    torch.cuda.device_count() == 1 or not torch.cuda.is_available()
                 ):
                     checkpoint["state_dict"] = {
                         key.replace("module.", ""): value
