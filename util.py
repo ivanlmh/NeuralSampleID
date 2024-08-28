@@ -60,7 +60,7 @@ def load_index(cfg, data_dir, ext=["wav", "mp3"], shuffle_dataset=True, mode="tr
 
 
 def load_sample100_index(
-    cfg, data_dir, ext=["mp3"], shuffle_dataset=True
+    cfg, data_dir, ext=["mp3"], shuffle_dataset=True, mode="train"
 ):  # , mode="train"):
     # verify data_dir is called sample_100, has an audio subdirectory and a samples.csv file
     if not os.path.exists(data_dir):
@@ -92,8 +92,8 @@ def load_sample100_index(
 
     # csv columns are sample_id,original_track_id,sample_track_id,t_original,t_sample,n_repetitions,sample_type,interpolation,comments
     # fpaths are data_dir/audio/{sample_track_id}.mp3
-    # open csv
-    with open(os.path.join(data_dir, "samples.csv"), "r") as f:
+    # open csv encode as latin-1
+    with open(os.path.join(data_dir, "samples.csv"), encoding="latin-1") as f:
         lines = f.readlines()
         fpaths = [
             os.path.join(data_dir, "audio", line.split(",")[2] + ".mp3")
