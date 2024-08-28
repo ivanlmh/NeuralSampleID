@@ -9,7 +9,13 @@ import librosa
 import torch.nn as nn
 import warnings
 
-from util import load_index, get_frames, qtile_normalize, qtile_norm
+from util import (
+    load_index,
+    load_sample100_index,
+    get_frames,
+    qtile_normalize,
+    qtile_norm,
+)
 
 
 class NeuralfpDataset(Dataset):
@@ -17,13 +23,13 @@ class NeuralfpDataset(Dataset):
         self.path = path
         self.transform = transform
         self.train = train
-        self.norm = cfg['norm']
-        self.offset = cfg['offset']
-        self.sample_rate = cfg['fs']
-        self.dur = cfg['dur']
-        self.n_frames = cfg['n_frames']
-        self.silence = cfg['silence']
-        self.error_threshold = cfg['error_threshold']
+        self.norm = cfg["norm"]
+        self.offset = cfg["offset"]
+        self.sample_rate = cfg["fs"]
+        self.dur = cfg["dur"]
+        self.n_frames = cfg["n_frames"]
+        self.silence = cfg["silence"]
+        self.error_threshold = cfg["error_threshold"]
 
         if train:
             self.filenames = load_index(cfg, path, mode="train")
