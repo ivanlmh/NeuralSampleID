@@ -18,4 +18,4 @@ conda activate neural_sample_id
 # python test_fp.py --query_lens=1,2,3,5 --n_query_db=500 --test_snr=-5 --test_dir=/data/EECS-Studiosync/fma_small --text=ivan_test_fma_small_sample100noise-5snr
 # python test_fp.py --query_lens=1,2,3,5 --n_query_db=500 --test_snr=10 --test_dir=/data/EECS-Studiosync/fma_small --text=ivan_test_fma_small_sample100noise
 # python test_fp.py --query_lens=1,2,3,5 --n_query_db=500 --test_snr=10 --test_dir=/data/home/eez083/sample_100 --text=ivan_test_sample_100
-python test_fp.py --query_lens=1,2,3,5 --n_query_db=500 --test_snr=10 --test_dir=/data/ECS-Studiosync/fma_small --sample_id=True --text=ivan_test_fma_small_sample_id
+python test_fp.py --query_lens=1,2,3,5 --n_query_db=500 --test_snr=10 --test_dir=/data/ECS-Studiosync/fma_small --sample_id --text=ivan_test_fma_small_sample_id
