@@ -39,11 +39,11 @@ class NeuralfpDataset(Dataset):
         print(f"Loaded {len(self.filenames)} files from {path}")
         self.ignore_idx = []
         self.error_counts = {}
-        
+
     def __getitem__(self, idx):
         if idx in self.ignore_idx:
             return self[idx + 1]
-        
+
         datapath = self.filenames[str(idx)]
         try:
             # with warnings.catch_warnings():
@@ -55,40 +55,39 @@ class NeuralfpDataset(Dataset):
             self.error_counts[idx] = self.error_counts.get(idx, 0) + 1
             if self.error_counts[idx] > self.error_threshold:
                 self.ignore_idx.append(idx)
-            return self[idx+1]
+            return self[idx + 1]
 
         audio_mono = audio.mean(dim=0)
-        
-        resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
-        audio_resampled = resampler(audio_mono)    
 
-        clip_frames = int(self.sample_rate*self.dur)
-        
+        resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
+        audio_resampled = resampler(audio_mono)
+
+        clip_frames = int(self.sample_rate * self.dur)
+
         if len(audio_resampled) <= clip_frames:
             # self.ignore_idx.append(idx)
             return self[idx + 1]
-    
-        
+
         #   For training pipeline, output a random frame of the audio
         if self.train:
             a_i = audio_resampled
             a_j = a_i.clone()
-            
-            offset_mod = int(self.sample_rate*(self.offset) + clip_frames)
+
+            offset_mod = int(self.sample_rate * (self.offset) + clip_frames)
             if len(audio_resampled) < offset_mod:
                 print(len(audio_resampled), offset_mod)
-            r = np.random.randint(0,len(audio_resampled)-offset_mod)
-            ri = np.random.randint(0,offset_mod - clip_frames)
-            rj = np.random.randint(0,offset_mod - clip_frames)
-            clip_i = a_i[r:r+offset_mod]
-            clip_j = a_j[r:r+offset_mod]
-            x_i = clip_i[ri:ri+clip_frames]
-            x_j = clip_j[rj:rj+clip_frames]
+            r = np.random.randint(0, len(audio_resampled) - offset_mod)
+            ri = np.random.randint(0, offset_mod - clip_frames)
+            rj = np.random.randint(0, offset_mod - clip_frames)
+            clip_i = a_i[r : r + offset_mod]
+            clip_j = a_j[r : r + offset_mod]
+            x_i = clip_i[ri : ri + clip_frames]
+            x_j = clip_j[rj : rj + clip_frames]
 
             if x_i.abs().max() < self.silence or x_j.abs().max() < self.silence:
                 print("Silence detected. Skipping...")
                 return self[idx + 1]
-            
+
             if self.norm is not None:
                 norm_val = qtile_norm(audio_resampled, q=self.norm)
                 x_i = x_i / norm_val
@@ -108,20 +107,18 @@ class NeuralfpDataset(Dataset):
 
             if len(x_j) < clip_frames:
                 x_j = F.pad(x_j, (0, clip_frames - len(x_j)))
-            else:    
+            else:
                 x_j = x_j[:clip_frames]
 
-
             return x_i, x_j
-        
+
         #   For validation / test, output consecutive (overlapping) frames
         else:
             return audio_resampled
             # return audio_resampled
-    
+
     def __len__(self):
         return len(self.filenames)
-    
 
 
 # create class for NeuralSampleIDDataset
@@ -130,13 +127,13 @@ class NeuralSampleIDDataset(Dataset):
         self.path = path
         self.transform = transform
         self.train = train
-        self.norm = cfg['norm']
-        self.offset = cfg['offset']
-        self.sample_rate = cfg['fs']
-        self.dur = cfg['dur']
-        self.n_frames = cfg['n_frames']
-        self.silence = cfg['silence']
-        self.error_threshold = cfg['error_threshold']
+        self.norm = cfg["norm"]
+        self.offset = cfg["offset"]
+        self.sample_rate = cfg["fs"]
+        self.dur = cfg["dur"]
+        self.n_frames = cfg["n_frames"]
+        self.silence = cfg["silence"]
+        self.error_threshold = cfg["error_threshold"]
 
         if train:
             # self.filenames = load_index(cfg, path, mode="train")
@@ -147,11 +144,11 @@ class NeuralSampleIDDataset(Dataset):
         print(f"Loaded {len(self.filenames)} files from {path}")
         self.ignore_idx = []
         self.error_counts = {}
-        
+
     def __getitem__(self, idx):
         if idx in self.ignore_idx:
             return self[idx + 1]
-        
+
         datapath = self.filenames[str(idx)]
         try:
             # with warnings.catch_warnings():
@@ -163,33 +160,31 @@ class NeuralSampleIDDataset(Dataset):
             self.error_counts[idx] = self.error_counts.get(idx, 0) + 1
             if self.error_counts[idx] > self.error_threshold:
                 self.ignore_idx.append(idx)
-            return self[idx+1]
+            return self[idx + 1]
 
         # audio mono shape is (1, n_samples)
         audio_mono = audio.mean(dim=0)
-        
+
         resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
         audio_resampled = resampler(audio_mono)
 
         # csv columns are sample_id,original_track_id,sample_track_id,t_original,t_sample,n_repetitions,sample_type,interpolation,comments
         # open csv and get t_sample
-        csv_path = os.path.join(self.path, 'samples.csv')
-        with open(csv_path) as f:
+        csv_path = os.path.join(self.path, "samples.csv")
+        with open(csv_path, encoding="latin-1") as f:
             lines = f.readlines()
-            t_sample = int(lines[idx].split(',')[4])
+            t_sample = int(lines[idx + 1].split(",")[4])  # +1 because of header of csv
+        clip_frames = int(self.sample_rate * self.dur)
 
-        clip_frames = int(self.sample_rate*self.dur)
-        
-        audio_cut = audio_resampled[:, t_sample:t_sample+clip_frames]
-    
-        
-        #   TODO: 
+        audio_cut = audio_resampled[t_sample : t_sample + clip_frames]
+
+        #   TODO:
         if self.train:
-            return audio_cut 
+            return audio_cut
         #   For validation / test, output consecutive (overlapping) frames
         else:
             return audio_cut
             # return audio_resampled
-    
+
     def __len__(self):
         return len(self.filenames)
