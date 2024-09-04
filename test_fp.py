@@ -63,6 +63,7 @@ parser.add_argument("--recompute", action="store_true", default=False)
 parser.add_argument("--k", default=3, type=int)
 parser.add_argument("--test_ids", default="1000", type=str)
 parser.add_argument("--sample_id", action="store_true", default=False)
+parser.add_argument("--sample_dir", default="data/sample100.json", type=str)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -220,23 +221,40 @@ def main():
     ).to(device)
 
     if args.sample_id:
-        dataset = NeuralSampleIDDataset(cfg, path=args.test_dir, train=False)
+        assert args.sample_dir is not None, "sample_dir must be specified for sample_id"
+        dataset_sample = NeuralSampleIDDataset(cfg, path=args.sample_dir, train=False)
+        dataset_dummy = NeuralfpDataset(cfg, path=args.test_dir, train=False)
+        # verify that both n_dummy_db and n_query_db are not None
+        assert args.n_dummy_db is not None, "n_dummy_db must be specified for sample_id"
+        assert args.n_query_db is not None, "n_query_db must be specified for sample_id"
+        if shuffle_dataset:
+            np.random.seed(random_seed)
+            dummy_indices = np.random.choice(
+                len(dataset_dummy), args.n_dummy_db, replace=False
+            )
+            query_db_indices = np.random.choice(
+                len(dataset_sample), args.n_query_db, replace=False
+            )
+        else:
+            dummy_indices = np.arange(args.n_dummy_db)
+            query_db_indices = np.arange(args.n_query_db)
+
     else:
         dataset = NeuralfpDataset(cfg, path=args.test_dir, train=False)
 
-    dataset_size = len(dataset)
-    indices = list(range(dataset_size))
-    split1 = args.n_dummy_db
-    split2 = args.n_query_db
-    if split1 is None:
-        split1 = len(dataset) - split2
-    if shuffle_dataset:
-        np.random.seed(random_seed)
-        np.random.shuffle(indices)
-    dummy_indices, query_db_indices = (
-        indices[:split1],
-        indices[split1 : split1 + split2],
-    )
+        dataset_size = len(dataset)
+        indices = list(range(dataset_size))
+        split1 = args.n_dummy_db
+        split2 = args.n_query_db
+        if split1 is None:
+            split1 = len(dataset) - split2
+        if shuffle_dataset:
+            np.random.seed(random_seed)
+            np.random.shuffle(indices)
+        dummy_indices, query_db_indices = (
+            indices[:split1],
+            indices[split1 : split1 + split2],
+        )
 
     print(
         f"Creating dummy db with {len(dummy_indices)} samples and query db with {len(query_db_indices)} samples"
@@ -244,25 +262,47 @@ def main():
     dummy_db_sampler = SubsetRandomSampler(dummy_indices)
     query_db_sampler = SubsetRandomSampler(query_db_indices)
 
-    dummy_db_loader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=1,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True,
-        drop_last=False,
-        sampler=dummy_db_sampler,
-    )
+    if args.sample_id:
+        dummy_db_loader = torch.utils.data.DataLoader(
+            dataset_dummy,
+            batch_size=1,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+            drop_last=False,
+            sampler=dummy_db_sampler,
+        )
 
-    query_db_loader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=1,
-        shuffle=False,
-        num_workers=4,
-        pin_memory=True,
-        drop_last=False,
-        sampler=query_db_sampler,
-    )
+        query_db_loader = torch.utils.data.DataLoader(
+            dataset_sample,
+            batch_size=1,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+            drop_last=False,
+            sampler=query_db_sampler,
+        )
+
+    else:
+        dummy_db_loader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+            drop_last=False,
+            sampler=dummy_db_sampler,
+        )
+
+        query_db_loader = torch.utils.data.DataLoader(
+            dataset,
+            batch_size=1,
+            shuffle=False,
+            num_workers=4,
+            pin_memory=True,
+            drop_last=False,
+            sampler=query_db_sampler,
+        )
 
     if args.small_test:
         index_type = "l2"

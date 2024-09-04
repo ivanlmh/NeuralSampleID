@@ -32,6 +32,8 @@ def load_index(cfg, data_dir, ext=["wav", "mp3"], shuffle_dataset=True, mode="tr
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Directory {data_dir} not found")
 
+    # TODO: fix this properly
+    assert data_dir.split("/")[-1] != "", "directory must not end with a /"
     json_path = os.path.join(cfg["data_dir"], data_dir.split("/")[-1] + ".json")
     if os.path.exists(json_path):
         print(f"Loading indices from {json_path}")
@@ -76,6 +78,8 @@ def load_sample100_index(
             dataset = json.load(fp)
         return dataset
 
+    # TODO: fix this properly
+    assert data_dir.split("/")[-1] != "", "directory must not end with a /"
     json_path = os.path.join(cfg["data_dir"], data_dir.split("/")[-1] + ".json")
     if os.path.exists(json_path):
         print(f"Loading indices from {json_path}")
