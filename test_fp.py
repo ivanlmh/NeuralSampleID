@@ -71,6 +71,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 def create_table(
     hit_rates, overlap, dur, test_seq_len=[1, 3, 5, 9, 11, 19], text="test"
 ):
+    # Create table for tensorboard visualization of hit rates for different query lengths
     table = f"""<table>
     <tr>
     <th colspan="5"{text}</th>
@@ -401,6 +402,8 @@ def main():
             # Create table
             print(f"Top-1 exact hit rate = {hit_rates[0]}")
             print(f"Top-1 near hit rate = {hit_rates[1]}")
+            print(f"Top-3 exact hit rate = {hit_rates[2]}")
+            print(f"Top-10 exact hit rate = {hit_rates[3]}")
 
 
 if __name__ == "__main__":
