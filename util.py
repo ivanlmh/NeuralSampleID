@@ -79,7 +79,8 @@ def load_sample100_index(
         return dataset
 
     json_path = os.path.join(
-        cfg["data_dir"], os.path.normpath(data_dir.split("/")[-1]) + ".json"
+        cfg["data_dir"],
+        os.path.normpath(data_dir.split("/")[-1]) + "_querysamples.json",
     )
     if os.path.exists(json_path):
         print(f"Loading indices from {json_path}")
@@ -132,7 +133,9 @@ def load_augmentation_index(
 ):
     dataset = {"train": [], "test": [], "validate": []}
     if json_path is None:
-        json_path = os.path.join(data_dir, data_dir.split("/")[-1] + ".json")
+        json_path = os.path.join(
+            data_dir, os.path.normpath(data_dir.split("/")[-1]) + ".json"
+        )
     if not os.path.exists(json_path):
         fpaths = glob.glob(os.path.join(data_dir, "**/*.*"), recursive=True)
         fpaths = [p for p in fpaths if p.split(".")[-1] in ext]
