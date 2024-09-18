@@ -150,10 +150,13 @@ class NeuralSampleIDDataset(Dataset):
             return self[idx + 1]
 
         datapath = self.filenames[str(idx)]
+        datapath_sample = datapath[0]
+        datapath_original = datapath[1]
         try:
             # with warnings.catch_warnings():
             #     warnings.simplefilter("ignore")
-            audio, sr = torchaudio.load(datapath)
+            audio_sample, sr = torchaudio.load(datapath_sample)
+            audio_original, sr = torchaudio.load(datapath_original)
 
         except Exception:
             print("Error loading:" + self.filenames[str(idx)])
@@ -163,10 +166,12 @@ class NeuralSampleIDDataset(Dataset):
             return self[idx + 1]
 
         # audio mono shape is (1, n_samples)
-        audio_mono = audio.mean(dim=0)
+        audio_sample_mono = audio_sample.mean(dim=0)
+        audio_original_mono = audio_original.mean(dim=0)
 
         resampler = torchaudio.transforms.Resample(sr, self.sample_rate)
-        audio_resampled = resampler(audio_mono)
+        audio_sample_resampled = resampler(audio_sample_mono)
+        audio_original_resampled = resampler(audio_original_mono)
 
         # csv columns are sample_id,original_track_id,sample_track_id,t_original,t_sample,n_repetitions,sample_type,interpolation,comments
         # open csv and get t_sample
@@ -174,16 +179,19 @@ class NeuralSampleIDDataset(Dataset):
         with open(csv_path, encoding="latin-1") as f:
             lines = f.readlines()
             t_sample = int(lines[idx + 1].split(",")[4])  # +1 because of header of csv
+            t_original = int(lines[idx + 1].split(",")[3])
         clip_frames = int(self.sample_rate * self.dur)
 
-        audio_cut = audio_resampled[t_sample : t_sample + clip_frames]
+        audio_sample_cut = audio_sample_resampled[t_sample : t_sample + clip_frames]
+        audio_original_cut = audio_original_resampled[t_original : t_original + clip_frames]
+
 
         #   TODO:
         if self.train:
-            return audio_cut
+            return audio_sample_cut, audio_original_cut
         #   For validation / test, output consecutive (overlapping) frames
         else:
-            return audio_cut
+            return audio_sample_resampled, audio_original_resampled
             # return audio_resampled
 
     def __len__(self):

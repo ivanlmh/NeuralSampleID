@@ -100,17 +100,22 @@ def load_sample100_index(
     # open csv encode as latin-1
     with open(os.path.join(data_dir, "samples.csv"), encoding="latin-1") as f:
         lines = f.readlines()
-        fpaths = [
+        fpaths_sample = [
             os.path.join(data_dir, "audio", line.split(",")[2] + ".mp3")
             for line in lines[1:]
         ]
+        fpaths_original = [
+            os.path.join(data_dir, "audio", line.split(",")[1] + ".mp3")
+            for line in lines[1:]
+        ]
     # assert file exists
-    for fpath in fpaths:
+    for fpath in fpaths_sample + fpaths_original:
         if not os.path.exists(fpath):
             raise FileNotFoundError(f"File {fpath} does not exist")
 
-    dataset_size = len(fpaths)
-    indices = list(range(dataset_size))
+    assert len(fpaths_sample) == len(fpaths_original), "Different number of sample and original files"
+    dataset_size = len(fpaths_sample)
+    # indices = list(range(dataset_size))
     # if shuffle_dataset:
     #     np.random.seed(42)
     #     np.random.shuffle(indices)
@@ -120,7 +125,7 @@ def load_sample100_index(
         size = cfg["val_sz"]
     # returns a dictionary, the key is the index and the value is the file path
     # TO DO: FIX the problem is that the indices are always cut off at the same point if no shuffle
-    dataset = {str(i): fpaths[i] for i in indices[:size]}
+    dataset = {str(i): (fpaths_sample[i], fpaths_original[i]) for i in range(size)}
 
     with open(json_path, "w") as fp:
         json.dump(dataset, fp)
