@@ -214,8 +214,10 @@ def main():
         noise_test_idx = load_augmentation_index(
             noise_dir, json_path=args.noise_idx, splits=0.8
         )[args.noise_split]
+        print(f"Loaded subset of noise indices from {noise_dir}")
     else:
         noise_test_idx = load_augmentation_index(noise_dir, splits=0.8)["test"]
+        print(f"Loaded all noise indices from {noise_dir}")
     ir_test_idx = load_augmentation_index(ir_dir, splits=0.8)["test"]
     test_augment = GPUTransformNeuralfp(
         cfg=cfg, ir_dir=ir_test_idx, noise_dir=noise_test_idx, train=False

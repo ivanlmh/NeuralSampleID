@@ -119,7 +119,7 @@ def load_sample100_index(
     else:
         size = cfg["val_sz"]
     # returns a dictionary, the key is the index and the value is the file path
-    # the problem is that the indices are always cut off at the same point
+    # TO DO: FIX the problem is that the indices are always cut off at the same point if no shuffle
     dataset = {str(i): fpaths[i] for i in indices[:size]}
 
     with open(json_path, "w") as fp:
@@ -134,7 +134,7 @@ def load_augmentation_index(
     dataset = {"train": [], "test": [], "validate": []}
     if json_path is None:
         json_path = os.path.join(
-            data_dir, os.path.normpath(data_dir.split("/")[-1]) + ".json"
+            data_dir, data_dir.split("/")[-1] + ".json"
         )
     if not os.path.exists(json_path):
         fpaths = glob.glob(os.path.join(data_dir, "**/*.*"), recursive=True)
