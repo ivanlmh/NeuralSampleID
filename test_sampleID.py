@@ -103,8 +103,9 @@ def create_sampleid_db(dataloader, augment, model, output_root_dir, verbose=True
         sample_audio = sample_audio.to(device)
         original_audio = original_audio.to(device)
         # x_i, x_j = augment(audio, audio)
-        x_i = original_audio
-        x_j = sample_audio
+        x_i, _ = augment(original_audio, None)
+        x_j, _ = augment(sample_audio, None)
+        print(f"Shape of xi {x_i.shape} and xj {x_j.shape}")
         with torch.no_grad():
             _, _, z_i, z_j = model(x_i.to(device), x_j.to(device))
 
@@ -211,6 +212,7 @@ def main():
 
     print("Creating dataloaders ...")
 
+    # TO DO: REMOVE THIS AS IT IS NOT USED
     # Augmentation for testing with specific noise subsets
     if args.noise_idx is not None:
         noise_test_idx = load_augmentation_index(
