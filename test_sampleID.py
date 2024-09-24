@@ -1,15 +1,15 @@
 import os
-import random
+# import random
 import numpy as np
 import torch
-import torch.nn as nn
+# import torch.nn as nn
 import argparse
-import faiss
-import json
-import shutil
+# import faiss
+# import json
+# import shutil
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
-from torch.nn.parallel import DataParallel
+# from torch.nn.parallel import DataParallel
 import torchaudio
 
 torchaudio.set_audio_backend("soundfile")
@@ -26,7 +26,7 @@ from modules.data import NeuralfpDataset, NeuralSampleIDDataset
 from encoder.graph_encoder import GraphEncoder
 from simclr.simclr import SimCLR
 from modules.transformations import GPUTransformNeuralfp
-from eval import get_index, load_memmap_data, eval_faiss
+from eval import eval_faiss#, get_index, load_memmap_data
 
 
 # Directories
