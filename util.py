@@ -20,7 +20,7 @@ class DummyScaler:
         pass
 
 
-def load_index(cfg, data_dir, ext=["wav", "mp3"], shuffle_dataset=True, mode="train"):
+def load_index(cfg, data_dir, ext=["mp3"], shuffle_dataset=True, mode="train"):#"wav", "mp3"], shuffle_dataset=True, mode="train"):
 
     if data_dir.endswith(".json"):
         print(f"=>Loading indices from index file {data_dir}")
@@ -119,13 +119,14 @@ def load_sample100_index(
     # if shuffle_dataset:
     #     np.random.seed(42)
     #     np.random.shuffle(indices)
-    if mode == "train":
-        size = cfg["train_sz"]
-    else:
-        size = cfg["val_sz"]
+    # if mode == "train":
+    #     size = cfg["train_sz"]
+    # else:
+    #     size = cfg["val_sz"]
     # returns a dictionary, the key is the index and the value is the file path
     # TO DO: FIX the problem is that the indices are always cut off at the same point if no shuffle
-    dataset = {str(i): (fpaths_sample[i], fpaths_original[i]) for i in range(size)}
+    # print("Size: ", dataset_size, "Length: ", len(fpaths_sample), len(fpaths_original))
+    dataset = {str(i): (fpaths_sample[i], fpaths_original[i]) for i in range(dataset_size)}
 
     with open(json_path, "w") as fp:
         json.dump(dataset, fp)
