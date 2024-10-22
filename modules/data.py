@@ -206,5 +206,8 @@ class NeuralSampleIDDataset(Dataset):
             return audio_sample_cut, audio_original_cut
             # return audio_resampled
 
+            # # I will return the cut verions, so as to focus on the time around which the sample starts
+            # return audio_sample_resampled[t_sample : t_sample + int(self.sample_rate * 10)], audio_original_resampled[t_sample : t_sample + int(self.sample_rate * 10)]
+
     def __len__(self):
         return len(self.filenames)
