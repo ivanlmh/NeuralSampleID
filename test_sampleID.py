@@ -102,6 +102,7 @@ def create_sampleid_db(dataloader, augment, model, output_root_dir, verbose=True
     for idx, (sample_audio, original_audio) in enumerate(dataloader):
         sample_audio = sample_audio.to(device)
         original_audio = original_audio.to(device)
+        print(f"Shape of original audio {original_audio.shape} and sample audio {sample_audio.shape}")
         # x_i, x_j = augment(audio, audio)
         x_i, _ = augment(original_audio, None)
         x_j, _ = augment(sample_audio, None)
@@ -120,6 +121,9 @@ def create_sampleid_db(dataloader, augment, model, output_root_dir, verbose=True
     fp_db = np.concatenate(fp_db)
     fp_q = np.concatenate(fp_q)
     arr_shape = (len(fp_db), z_i.shape[-1])
+
+    print(f"Shape of fp_db {fp_db.shape} and fp_q {fp_q.shape}")
+    print(f"Shape of arr_shape {arr_shape}")
 
     arr_q = np.memmap(
         f"{output_root_dir}/query.mm", dtype="float32", mode="w+", shape=arr_shape
@@ -148,8 +152,10 @@ def create_dummy_db(
     print("=> Creating dummy fingerprints...")
     for idx, audio in enumerate(dataloader):
         audio = audio.to(device)
+        print(f"Shape of audio {audio.shape}")
         x_i, _ = augment(audio, None)
         # x_i = torch.unsqueeze(db[0],1)
+        print(f"Shape of x_i {x_i.shape}")
         with torch.no_grad():
             _, _, z_i, _ = model(x_i.to(device), x_i.to(device))
 
@@ -187,7 +193,7 @@ def main():
     assert args.small_test is False
     # Hyperparameters
     random_seed = 42
-    shuffle_dataset = True
+    shuffle_dataset = False#True
 
     ################## kNN experimental setup ##################
     if list(test_cfg.keys())[0] == "tck":
