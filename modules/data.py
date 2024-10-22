@@ -156,7 +156,10 @@ class NeuralSampleIDDataset(Dataset):
             # with warnings.catch_warnings():
             #     warnings.simplefilter("ignore")
             audio_sample, sr = torchaudio.load(datapath_sample)
-            audio_original, sr = torchaudio.load(datapath_original)
+            audio_original, sr_original = torchaudio.load(datapath_original)
+            assert (
+                sr == sr_original
+            ), "Sample and original audio have different sample rates"
 
         except Exception:
             print("Error loading:" + self.filenames[str(idx)])
@@ -180,18 +183,27 @@ class NeuralSampleIDDataset(Dataset):
             lines = f.readlines()
             t_sample = int(lines[idx + 1].split(",")[4])  # +1 because of header of csv
             t_original = int(lines[idx + 1].split(",")[3])
+            # print(f"t_sample: {t_sample}, t_original: {t_original}")
         clip_frames = int(self.sample_rate * self.dur)
+        # print(
+        #     f"clip_frames: {clip_frames}, sample_rate: {self.sample_rate}, dur: {self.dur}"
+        # )
+        # print(
+        #     f"audio_sample_resampled.shape: {audio_sample_resampled.shape}, audio_original_resampled.shape: {audio_original_resampled.shape}"
+        # )
 
         audio_sample_cut = audio_sample_resampled[t_sample : t_sample + clip_frames]
-        audio_original_cut = audio_original_resampled[t_original : t_original + clip_frames]
-
+        audio_original_cut = audio_original_resampled[
+            t_original : t_original + clip_frames
+        ]
 
         #   TODO:
         if self.train:
             return audio_sample_cut, audio_original_cut
         #   For validation / test, output consecutive (overlapping) frames
         else:
-            return audio_sample_resampled, audio_original_resampled
+            # return audio_sample_resampled, audio_original_resampled
+            return audio_sample_cut, audio_original_cut
             # return audio_resampled
 
     def __len__(self):

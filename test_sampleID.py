@@ -1,14 +1,18 @@
 import os
+
 # import random
 import numpy as np
 import torch
+
 # import torch.nn as nn
 import argparse
+
 # import faiss
 # import json
 # import shutil
 from torch.utils.data.sampler import SubsetRandomSampler
 from torch.utils.tensorboard import SummaryWriter
+
 # from torch.nn.parallel import DataParallel
 import torchaudio
 
@@ -26,7 +30,7 @@ from modules.data import NeuralfpDataset, NeuralSampleIDDataset
 from encoder.graph_encoder import GraphEncoder
 from simclr.simclr import SimCLR
 from modules.transformations import GPUTransformNeuralfp
-from eval import eval_faiss#, get_index, load_memmap_data
+from eval import eval_faiss  # , get_index, load_memmap_data
 
 
 # Directories
@@ -108,6 +112,9 @@ def create_sampleid_db(dataloader, augment, model, output_root_dir, verbose=True
         print(f"Shape of xi {x_i.shape} and xj {x_j.shape}")
         with torch.no_grad():
             _, _, z_i, z_j = model(x_i.to(device), x_j.to(device))
+
+        # # THIS IS A ONE OF EXP to check if it works/fails
+        # z_i = z_j
 
         # print(f'Shape of z_i {z_i.shape} inside the create_fp_db function')
         fp_db.append(z_i.detach().cpu().numpy())
@@ -227,11 +234,8 @@ def main():
         cfg=cfg, ir_dir=ir_test_idx, noise_dir=noise_test_idx, train=False
     ).to(device)
 
-
     assert args.sample_dir is not None, "sample_dir must be specified for sample_id"
-    dataset_samplequery = NeuralSampleIDDataset(
-        cfg, path=args.sample_dir, train=False
-    )
+    dataset_samplequery = NeuralSampleIDDataset(cfg, path=args.sample_dir, train=False)
     dataset_dummy = NeuralfpDataset(cfg, path=args.test_dir, train=False)
     # verify that both n_dummy_db and n_query_db are not None
     assert args.n_dummy_db is not None, "n_dummy_db must be specified for sample_id"
@@ -248,14 +252,12 @@ def main():
         dummy_indices = np.arange(args.n_dummy_db)
         query_db_indices = np.arange(args.n_query_db)
 
-
     print(
         f"Creating dummy db with {len(dummy_indices)} samples and query db with {len(query_db_indices)} samples"
     )
     # TODO: Understand why we randomize again here
     dummy_db_sampler = SubsetRandomSampler(dummy_indices)
     query_db_sampler = SubsetRandomSampler(query_db_indices)
-
 
     dummy_db_loader = torch.utils.data.DataLoader(
         dataset_dummy,
