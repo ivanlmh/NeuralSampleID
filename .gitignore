@@ -63,6 +63,8 @@ data/
 output/
 logs/
 runs/
+artificial_dataset_v1/
+artificial_data/
 
 # Environment variable files
 .env
