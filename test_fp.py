@@ -184,7 +184,7 @@ def main():
     assert args.small_test is False
     # Hyperparameters
     random_seed = 42
-    shuffle_dataset = True
+    shuffle_dataset = False #True
 
     ################## kNN experimental setup ##################
     if list(test_cfg.keys())[0] == "tck":
@@ -227,9 +227,9 @@ def main():
         assert args.sample_dir is not None, "sample_dir must be specified for sample_id"
         dataset_sample = NeuralSampleIDDataset(cfg, path=args.sample_dir, train=False)
         dataset_dummy = NeuralfpDataset(cfg, path=args.test_dir, train=False)
-        # verify that both n_dummy_db and n_query_db are not None
-        assert args.n_dummy_db is not None, "n_dummy_db must be specified for sample_id"
-        assert args.n_query_db is not None, "n_query_db must be specified for sample_id"
+        # # verify that both n_dummy_db and n_query_db are not None
+        # assert args.n_dummy_db is not None, "n_dummy_db must be specified for sample_id"
+        # assert args.n_query_db is not None, "n_query_db must be specified for sample_id"
         if shuffle_dataset:
             np.random.seed(random_seed)
             dummy_indices = np.random.choice(
