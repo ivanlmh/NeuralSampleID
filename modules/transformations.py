@@ -210,8 +210,16 @@ class GPUTransformNeuralfpM2L(nn.Module):
             X_j = self.encdec(x_j)
 
         else:
+            if cfg["fs"] != 44100:
+                x_i = self.resampler(x_i)
+                x_j = self.resampler(x_j)
             # X_i = self.logmelspec(x_i.squeeze(0)).transpose(1, 0)
-            X_i = self.encdec(x_i.squeeze(0)).transpose(1, 0)
+            X_i = self.encdec(x_i.squeeze(0)).squeeze(0).transpose(1, 0)
+
+            # take X_i from shape ([64, 1, 1634]) to ([x, 64, 32])
+            # X_i = X_i.unfold(
+            #     0, size=self.n_frames, step=int(self.n_frames * (1 - self.overlap))
+            # )
             X_i = X_i.unfold(
                 0, size=self.n_frames, step=int(self.n_frames * (1 - self.overlap))
             )
