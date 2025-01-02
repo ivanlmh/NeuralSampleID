@@ -7,7 +7,7 @@
 #$ -l gpu=1           # request 2 GPU
 #$ -l gpu_type=ampere
 #$ -N ivan_1st_train_grafp
-#$ -o /data/home/eez083/NeuralSampleID/output/ivan_train
+#$ -o /data/home/eez083/NeuralSampleID/output/ivan_script
 #$ -m beas
 
 # module load python/3.10.7
@@ -17,4 +17,4 @@
 source /data/home/eez083/.bashrc
 conda activate neural_sample_id
 
-python train.py --ckp=tc_30
+python separate_audio.py
