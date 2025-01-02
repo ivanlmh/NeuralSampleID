@@ -43,7 +43,7 @@ lambda: 0.0
 error_threshold: 5
 
 # Augmentation hyperparameters
-n_frames: 32 # depends on the spectrogram parameters
+n_frames: 32 #10 #32 # depends on the spectrogram parameters (10 is for Music2latent)
 overlap: 0.5
 tr_snr: [0, 20]
 val_snr: [0, 10]

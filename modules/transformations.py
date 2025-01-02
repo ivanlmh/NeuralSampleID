@@ -133,7 +133,7 @@ class GPUTransformNeuralfpM2L(nn.Module):
     """
 
     def __init__(self, cfg, ir_dir, noise_dir, train=True, cpu=False):
-        super(GPUTransformNeuralfp, self).__init__()
+        super(GPUTransformNeuralfpM2L, self).__init__()
         self.sample_rate = cfg["fs"]
         self.ir_dir = ir_dir
         self.noise_dir = noise_dir
@@ -202,19 +202,30 @@ class GPUTransformNeuralfpM2L(nn.Module):
             # X_i = self.logmelspec(x_i)
             # assert X_i.device == torch.device("cuda:0"), f"X_i device: {X_i.device}"
             # X_j = self.logmelspec(x_j)
-            if cfg["fs"] != 44100:
+            if self.sample_rate != 44100:
                 x_i = self.resampler(x_i)
                 x_j = self.resampler(x_j)
-            X_i = self.encdec(x_i)
+            X_i = self.encdec.encode(x_i)
             assert X_i.device == torch.device("cuda:0"), f"X_i device: {X_i.device}"
-            X_j = self.encdec(x_j)
+            X_j = self.encdec.encode(x_j)
 
         else:
-            # X_i = self.logmelspec(x_i.squeeze(0)).transpose(1, 0)
-            X_i = self.encdec(x_i.squeeze(0)).transpose(1, 0)
+            X_i = self.logmelspec(x_i.squeeze(0)).transpose(1, 0)
+            # print("mel shape xi", X_i.shape)
             X_i = X_i.unfold(
                 0, size=self.n_frames, step=int(self.n_frames * (1 - self.overlap))
             )
+            # print("mel shape xi", X_i.shape)
+
+            if self.sample_rate != 44100:
+                x_i = self.resampler(x_i)
+            X_i = self.encdec.encode(x_i.squeeze(0)).squeeze(0).transpose(1, 0)
+            # print("m2l shape xi", X_i.shape)
+            # take from shape ([64, 1, 1634]) to 
+            X_i = X_i.unfold(
+                0, size=self.n_frames, step=int(self.n_frames * (1 - self.overlap))
+            )
+            # print("m2l shape xi", X_i.shape)
 
             if x_j is None:
                 # Dummy db does not need augmentation
@@ -229,11 +240,20 @@ class GPUTransformNeuralfpM2L(nn.Module):
                     x_j.view(1, 1, x_j.shape[-1]), sample_rate=self.sample_rate
                 )
 
-            # X_j = self.logmelspec(x_j.flatten()).transpose(1, 0)
-            X_j = self.encdec(x_j.flatten()).transpose(1, 0)
+            X_j = self.logmelspec(x_j.flatten()).transpose(1, 0)
+            # print("mel shape xj", X_j.shape)
             X_j = X_j.unfold(
                 0, size=self.n_frames, step=int(self.n_frames * (1 - self.overlap))
             )
+            # print("mel shape xj", X_j.shape)
+            if self.sample_rate != 44100:
+                x_j = self.resampler(x_j)
+            X_j = self.encdec.encode(x_j.flatten()).squeeze(0).transpose(1, 0)
+            # print("m2l shape xj", X_j.shape)
+            X_j = X_j.unfold(
+                0, size=self.n_frames, step=int(self.n_frames * (1 - self.overlap))
+            )
+            # print("m2l shape xj", X_j.shape)
 
         return X_i, X_j
 
