@@ -20,7 +20,9 @@ class DummyScaler:
         pass
 
 
-def load_index(cfg, data_dir, ext=["mp3"], shuffle_dataset=True, mode="train"):#"wav", "mp3"], shuffle_dataset=True, mode="train"):
+def load_index(
+    cfg, data_dir, ext=["mp3"], shuffle_dataset=True, mode="train", stem=None
+):  # "wav", "mp3"], shuffle_dataset=True, mode="train"):
 
     if data_dir.endswith(".json"):
         print(f"=>Loading indices from index file {data_dir}")
@@ -32,9 +34,15 @@ def load_index(cfg, data_dir, ext=["mp3"], shuffle_dataset=True, mode="train"):#
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Directory {data_dir} not found")
 
-    json_path = os.path.join(
-        cfg["data_dir"], os.path.normpath(data_dir.split("/")[-1]) + ".json"
-    )
+    if stem is None:
+        json_path = os.path.join(
+            cfg["data_dir"], os.path.normpath(data_dir.split("/")[-1]) + ".json"
+        )
+    else:
+        json_path = os.path.join(
+            cfg["data_dir"], os.path.normpath(data_dir.split("/")[-1]) + f"_{stem}.json"
+        )
+
     if os.path.exists(json_path):
         print(f"Loading indices from {json_path}")
         with open(json_path, "r") as fp:
@@ -43,6 +51,10 @@ def load_index(cfg, data_dir, ext=["mp3"], shuffle_dataset=True, mode="train"):#
 
     fpaths = glob.glob(os.path.join(data_dir, "**/*.*"), recursive=True)
     fpaths = [p for p in fpaths if p.split(".")[-1] in ext]
+
+    if stem is not None:
+        fpaths = [p for p in fpaths if stem in p]
+
     dataset_size = len(fpaths)
     indices = list(range(dataset_size))
     if shuffle_dataset:
@@ -113,7 +125,9 @@ def load_sample100_index(
         if not os.path.exists(fpath):
             raise FileNotFoundError(f"File {fpath} does not exist")
 
-    assert len(fpaths_sample) == len(fpaths_original), "Different number of sample and original files"
+    assert len(fpaths_sample) == len(
+        fpaths_original
+    ), "Different number of sample and original files"
     dataset_size = len(fpaths_sample)
     # indices = list(range(dataset_size))
     # if shuffle_dataset:
@@ -126,7 +140,9 @@ def load_sample100_index(
     # returns a dictionary, the key is the index and the value is the file path
     # TO DO: FIX the problem is that the indices are always cut off at the same point if no shuffle
     # print("Size: ", dataset_size, "Length: ", len(fpaths_sample), len(fpaths_original))
-    dataset = {str(i): (fpaths_sample[i], fpaths_original[i]) for i in range(dataset_size)}
+    dataset = {
+        str(i): (fpaths_sample[i], fpaths_original[i]) for i in range(dataset_size)
+    }
 
     with open(json_path, "w") as fp:
         json.dump(dataset, fp)
@@ -139,9 +155,7 @@ def load_augmentation_index(
 ):
     dataset = {"train": [], "test": [], "validate": []}
     if json_path is None:
-        json_path = os.path.join(
-            data_dir, data_dir.split("/")[-1] + ".json"
-        )
+        json_path = os.path.join(data_dir, data_dir.split("/")[-1] + ".json")
     if not os.path.exists(json_path):
         fpaths = glob.glob(os.path.join(data_dir, "**/*.*"), recursive=True)
         fpaths = [p for p in fpaths if p.split(".")[-1] in ext]

@@ -30,11 +30,12 @@ class NeuralfpDataset(Dataset):
         self.n_frames = cfg["n_frames"]
         self.silence = cfg["silence"]
         self.error_threshold = cfg["error_threshold"]
+        self.stem = cfg["stem"]
 
         if train:
-            self.filenames = load_index(cfg, path, mode="train")
+            self.filenames = load_index(cfg, path, mode="train", stem=self.stem)
         else:
-            self.filenames = load_index(cfg, path, mode="valid")
+            self.filenames = load_index(cfg, path, mode="valid", stem=self.stem)
 
         print(f"Loaded {len(self.filenames)} files from {path}")
         self.ignore_idx = []
