@@ -121,12 +121,12 @@ def main():
     ir_train_idx = load_augmentation_index(ir_dir, splits=0.8)["train"]
     noise_val_idx = load_augmentation_index(noise_dir, splits=0.8)["test"]
     ir_val_idx = load_augmentation_index(ir_dir, splits=0.8)["test"]
-    # gpu_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, train=True).to(device)
-    # cpu_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, cpu=True)
-    # val_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_val_idx, noise_dir=noise_val_idx, train=False).to(device)
-    gpu_augment = GPUTransformNeuralfpM2L(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, train=True).to(device)
-    cpu_augment = GPUTransformNeuralfpM2L(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, cpu=True)
-    val_augment = GPUTransformNeuralfpM2L(cfg=cfg, ir_dir=ir_val_idx, noise_dir=noise_val_idx, train=False).to(device)
+    gpu_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, train=True).to(device)
+    cpu_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, cpu=True)
+    val_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_val_idx, noise_dir=noise_val_idx, train=False).to(device)
+    # gpu_augment = GPUTransformNeuralfpM2L(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, train=True).to(device)
+    # cpu_augment = GPUTransformNeuralfpM2L(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, cpu=True)
+    # val_augment = GPUTransformNeuralfpM2L(cfg=cfg, ir_dir=ir_val_idx, noise_dir=noise_val_idx, train=False).to(device)
 
     print("Loading dataset...")
     train_dataset = NeuralfpDataset(cfg=cfg, path=train_dir, train=True, transform=cpu_augment)

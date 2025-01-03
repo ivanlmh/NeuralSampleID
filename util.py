@@ -39,6 +39,7 @@ def load_index(
             cfg["data_dir"], os.path.normpath(data_dir.split("/")[-1]) + ".json"
         )
     else:
+        print(f"Going to load indices with stem {stem}")
         json_path = os.path.join(
             cfg["data_dir"], os.path.normpath(data_dir.split("/")[-1]) + f"_{stem}.json"
         )
