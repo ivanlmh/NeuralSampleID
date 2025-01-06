@@ -67,6 +67,8 @@ parser.add_argument("--recompute", action="store_true", default=False)
 parser.add_argument("--k", default=3, type=int)
 parser.add_argument("--test_ids", default="1000", type=str)
 parser.add_argument("--sample_dir", default="data/sample100.json", type=str)
+parser.add_argument('--stem', default=None, type=str, help='Specify stem type (e.g., bass, drums)')
+# parser.add_argument('--ckp', default=None, type=str, help='Specific checkpoint to test (e.g., tc_31_bass)')
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -195,6 +197,10 @@ def main():
     test_cfg = load_config(args.test_config)
     ir_dir = cfg["ir_dir"]
     noise_dir = cfg["noise_dir"]
+
+    if args.stem:
+        cfg['stem'] = args.stem
+
     # args.recompute = False
     # assert args.recompute is False
     assert args.small_test is False

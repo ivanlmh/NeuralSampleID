@@ -3,6 +3,8 @@
 # congif2_4: best
 # config2_5: best
 # config2_7: [20, 40, 60, 80, 100, 120, 'best']
-tc_27 : ['best']
+tc_30: ['best']
+# tc_31_bass: ['best']
+# tc_27 : ['best']
 # tc_0: ['best']
 # tc_1: ['best']

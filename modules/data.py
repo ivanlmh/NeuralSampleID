@@ -30,7 +30,10 @@ class NeuralfpDataset(Dataset):
         self.n_frames = cfg["n_frames"]
         self.silence = cfg["silence"]
         self.error_threshold = cfg["error_threshold"]
-        self.stem = cfg["stem"]
+        if "stem" in cfg:
+            self.stem = cfg["stem"]
+        else:
+            self.stem = None
 
         if train:
             self.filenames = load_index(cfg, path, mode="train", stem=self.stem)

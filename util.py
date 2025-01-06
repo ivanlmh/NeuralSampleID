@@ -90,11 +90,20 @@ def load_sample100_index(
         with open(data_dir, "r") as fp:
             dataset = json.load(fp)
         return dataset
+    
+    # Add stem handling
+    stem = cfg.get('stem', None)  # Get stem from config if it exists
+    if stem:
+        json_path = os.path.join(
+            cfg["data_dir"],
+            os.path.normpath(data_dir.split("/")[-1]) + f"_querysamples_{stem}.json",
+        )
+    else:
+        json_path = os.path.join(
+            cfg["data_dir"],
+            os.path.normpath(data_dir.split("/")[-1]) + "_querysamples.json",
+        )
 
-    json_path = os.path.join(
-        cfg["data_dir"],
-        os.path.normpath(data_dir.split("/")[-1]) + "_querysamples.json",
-    )
     if os.path.exists(json_path):
         print(f"Loading indices from {json_path}")
         with open(json_path, "r") as fp:
@@ -111,16 +120,29 @@ def load_sample100_index(
     # csv columns are sample_id,original_track_id,sample_track_id,t_original,t_sample,n_repetitions,sample_type,interpolation,comments
     # fpaths are data_dir/audio/{sample_track_id}.mp3
     # open csv encode as latin-1
+   # Adjust file paths to include stem subdirectory if specified
     with open(os.path.join(data_dir, "samples.csv"), encoding="latin-1") as f:
         lines = f.readlines()
-        fpaths_sample = [
-            os.path.join(data_dir, "audio", line.split(",")[2] + ".mp3")
-            for line in lines[1:]
-        ]
-        fpaths_original = [
-            os.path.join(data_dir, "audio", line.split(",")[1] + ".mp3")
-            for line in lines[1:]
-        ]
+        if stem:
+            # Modify paths to point to stem files in htdemucs subdirectory
+            fpaths_sample = [
+                os.path.join(data_dir, "htdemucs", line.split(",")[2], f"{stem}.mp3")
+                for line in lines[1:]
+            ]
+            fpaths_original = [
+                os.path.join(data_dir, "htdemucs", line.split(",")[1], f"{stem}.mp3")
+                for line in lines[1:]
+            ]
+        else:
+            fpaths_sample = [
+                os.path.join(data_dir, "audio", line.split(",")[2] + ".mp3")
+                for line in lines[1:]
+            ]
+            fpaths_original = [
+                os.path.join(data_dir, "audio", line.split(",")[1] + ".mp3")
+                for line in lines[1:]
+            ]
+            
     # assert file exists
     for fpath in fpaths_sample + fpaths_original:
         if not os.path.exists(fpath):
