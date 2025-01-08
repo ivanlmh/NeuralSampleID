@@ -17,7 +17,7 @@ from util import *
 from simclr.ntxent import ntxent_loss
 from simclr.simclr import SimCLR   
 from modules.transformations import GPUTransformNeuralfp, GPUTransformNeuralfpM2L
-from modules.data import NeuralfpDataset
+from modules.data import NeuralfpDataset, neural_collate_fn
 from encoder.graph_encoder import GraphEncoder
 from eval import eval_faiss
 from test_fp import create_fp_db, create_dummy_db
@@ -132,7 +132,7 @@ def main():
     train_dataset = NeuralfpDataset(cfg=cfg, path=train_dir, train=True, transform=cpu_augment)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True,
-        num_workers=8, pin_memory=True, drop_last=True)
+        num_workers=8, pin_memory=True, drop_last=True, collate_fn=neural_collate_fn)
     
     valid_dataset = NeuralfpDataset(cfg=cfg, path=valid_dir, train=False)
     print("Creating validation dataloaders...")
