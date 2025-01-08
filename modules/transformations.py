@@ -302,3 +302,130 @@ class GPUTransformSamples(nn.Module):
             )
 
         return X_i, X_j
+
+
+class GPUTransformNeuralSampleid(nn.Module):
+    """
+    Transform includes pedalboard effects and song mixing.
+    Handles batched data and keeps track of song metadata.
+    """
+    def __init__(self, cfg, train=True, cpu=False):
+        super(GPUTransformNeuralSampleid, self).__init__()
+        self.sample_rate = cfg["fs"]
+        self.train = train
+        self.cpu = cpu
+        self.cfg = cfg
+        
+        # Define effects configuration
+        self.effects_config = {
+            'chorus': {
+                'rate_hz': 1.0,
+                'depth': 0.25,
+                'centre_delay_ms': 7.0,
+                'feedback': 0.0,
+                'mix': 0.5
+            },
+            'reverb': {
+                'room_size': 0.8,
+                'damping': 0.1,
+                'wet_level': 0.5,
+                'dry_level': 0.5
+            },
+            'distortion': {
+                'drive_db': 25
+            }
+        }
+        
+        # Create pedalboard effects
+        self.chorus = Chorus(**self.effects_config['chorus'])
+        self.reverb = Reverb(**self.effects_config['reverb'])
+        self.distortion = Distortion(**self.effects_config['distortion'])
+
+        # Keep melspec transform
+        self.logmelspec = nn.Sequential(
+            MelSpectrogram(
+                sample_rate=self.sample_rate,
+                win_length=cfg["win_len"],
+                hop_length=cfg["hop_len"],
+                n_fft=cfg["n_fft"],
+                n_mels=cfg["n_mels"],
+            ),
+            AmplitudeToDB(),
+        )
+
+    def process_audio_batch(self, batch_audio):
+        """Process a batch of audio with random effects and mixing"""
+        batch_size = batch_audio.shape[0]
+        processed_batch = []
+        
+        for i in range(batch_size):
+            # Convert to numpy for pedalboard processing
+            audio = batch_audio[i].cpu().numpy()
+            
+            # Create random effect chain for this sample
+            active_effects = []
+            if torch.rand(1).item() < 0.5:
+                active_effects.append(self.chorus)
+            if torch.rand(1).item() < 0.5:
+                active_effects.append(self.reverb)
+            if torch.rand(1).item() < 0.5:
+                active_effects.append(self.distortion)
+            
+            if active_effects:
+                board = Pedalboard(active_effects)
+                audio = board.process(audio, self.sample_rate)
+            
+            # Mix with another random sample from batch if desired
+            if torch.rand(1).item() < 0.9:
+                # Choose random sample from batch (not self)
+                other_idx = (i + torch.randint(1, batch_size, (1,)).item()) % batch_size
+                other_audio = batch_audio[other_idx].cpu().numpy()
+                
+                # Random gain between 0.1 and 0.7
+                gain = 0.05 + (0.45 * torch.rand(1).item())
+                audio = (1 - gain) * audio + (gain * other_audio)
+            
+            processed_batch.append(torch.from_numpy(audio))
+        
+        return torch.stack(processed_batch).to(batch_audio.device)
+
+    def forward(self, x_i, x_j, metadata=None):
+        """
+        Args:
+            x_i: First set of audio segments [B, T]
+            x_j: Second set of audio segments [B, T]
+            metadata: List of dicts containing info about each sample
+        """
+        if self.cpu:
+            return x_i, x_j, metadata
+
+        if self.train:
+            # Process both sets of samples
+            x_i_processed = self.process_audio_batch(x_i)
+            x_j_processed = self.process_audio_batch(x_j)
+            
+            # Convert to mel spectrograms
+            X_i = self.logmelspec(x_i_processed)
+            X_j = self.logmelspec(x_j_processed)
+            
+            # Update metadata with mixing info if needed
+            if metadata is not None:
+                for meta in metadata:
+                    meta['augmented'] = True
+            
+            return X_i, X_j, metadata
+
+        else:
+            # Validation mode
+            X_i = self.logmelspec(x_i.squeeze(0)).transpose(1, 0)
+            X_i = X_i.unfold(0, size=self.cfg['n_frames'], 
+                            step=int(self.cfg['n_frames'] * (1 - self.cfg['overlap'])))
+
+            if x_j is None:
+                return X_i, X_i, metadata
+
+            X_j = self.logmelspec(x_j.squeeze(0)).transpose(1, 0)
+            X_j = X_j.unfold(0, size=self.cfg['n_frames'],
+                            step=int(self.cfg['n_frames'] * (1 - self.cfg['overlap'])))
+
+            return X_i, X_j, metadata
