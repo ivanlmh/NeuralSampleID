@@ -66,7 +66,7 @@ def train(cfg, train_loader, model, optimizer, scaler, ir_idx, noise_idx, augmen
 
         # with torch.autocast(device_type='cuda', dtype=torch.float16, enabled=True):
         with torch.no_grad():
-            x_i, x_j = augment(x_i, x_j)
+            x_i, x_j, aug_metadata = augment(x_i, x_j, metadata)
         assert x_i.device == torch.device('cuda:0'), f"[IN TRAINING] x_i device: {x_i.device}"
         l1_i, l1_j, z_i, z_j = model(x_i, x_j)
         # assert loss is being computed for the whole batch

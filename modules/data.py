@@ -17,6 +17,13 @@ from util import (
     qtile_norm,
 )
 
+def neural_collate_fn(batch):
+    x_i = torch.stack([item[0] for item in batch])
+    x_j = torch.stack([item[1] for item in batch])
+    metadata = [item[2] for item in batch]
+    
+    return x_i, x_j, metadata
+
 
 class NeuralfpDataset(Dataset):
     def __init__(self, cfg, path, transform=None, train=False):
@@ -72,6 +79,15 @@ class NeuralfpDataset(Dataset):
             # self.ignore_idx.append(idx)
             return self[idx + 1]
 
+
+        metadata = {
+            'file_path': datapath,
+            'idx': idx,
+            'original_sr': sr,
+            'length': len(audio_resampled)
+        }
+
+
         #   For training pipeline, output a random frame of the audio
         if self.train:
             a_i = audio_resampled
@@ -83,6 +99,14 @@ class NeuralfpDataset(Dataset):
             r = np.random.randint(0, len(audio_resampled) - offset_mod)
             ri = np.random.randint(0, offset_mod - clip_frames)
             rj = np.random.randint(0, offset_mod - clip_frames)
+
+            # Add timestamps to metadata
+            metadata.update({
+                'start_i': r + ri,
+                'start_j': r + rj,
+                'clip_length': clip_frames
+            })
+
             clip_i = a_i[r : r + offset_mod]
             clip_j = a_j[r : r + offset_mod]
             x_i = clip_i[ri : ri + clip_frames]
@@ -114,11 +138,11 @@ class NeuralfpDataset(Dataset):
             else:
                 x_j = x_j[:clip_frames]
 
-            return x_i, x_j
+            return x_i, x_j, metadata
 
         #   For validation / test, output consecutive (overlapping) frames
         else:
-            return audio_resampled
+            return audio_resampled, None, metadata
             # return audio_resampled
 
     def __len__(self):
