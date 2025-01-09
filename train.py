@@ -16,7 +16,7 @@ torchaudio.set_audio_backend("soundfile")
 from util import *
 from simclr.ntxent import ntxent_loss
 from simclr.simclr import SimCLR   
-from modules.transformations import GPUTransformNeuralfp, GPUTransformNeuralfpM2L
+from modules.transformations import GPUTransformNeuralfp, GPUTransformNeuralfpM2L, GPUTransformNeuralSampleid
 from modules.data import NeuralfpDataset, neural_collate_fn
 from encoder.graph_encoder import GraphEncoder
 from eval import eval_faiss
@@ -58,7 +58,7 @@ def train(cfg, train_loader, model, optimizer, scaler, ir_idx, noise_idx, augmen
     loss_epoch = 0
     # return loss_epoch
 
-    for idx, (x_i, x_j) in enumerate(train_loader):
+    for idx, (x_i, x_j, metadata) in enumerate(train_loader):
 
         optimizer.zero_grad()
         x_i = x_i.to(device)
@@ -121,9 +121,12 @@ def main():
     ir_train_idx = load_augmentation_index(ir_dir, splits=0.8)["train"]
     noise_val_idx = load_augmentation_index(noise_dir, splits=0.8)["test"]
     ir_val_idx = load_augmentation_index(ir_dir, splits=0.8)["test"]
-    gpu_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, train=True).to(device)
-    cpu_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, cpu=True)
-    val_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_val_idx, noise_dir=noise_val_idx, train=False).to(device)
+    gpu_augment = GPUTransformNeuralSampleid(cfg=cfg, train=True).to(device)
+    cpu_augment = GPUTransformNeuralSampleid(cfg=cfg, cpu=True)
+    val_augment = GPUTransformNeuralSampleid(cfg=cfg, train=False).to(device)
+    # gpu_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, train=True).to(device)
+    # cpu_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, cpu=True)
+    # val_augment = GPUTransformNeuralfp(cfg=cfg, ir_dir=ir_val_idx, noise_dir=noise_val_idx, train=False).to(device)
     # gpu_augment = GPUTransformNeuralfpM2L(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, train=True).to(device)
     # cpu_augment = GPUTransformNeuralfpM2L(cfg=cfg, ir_dir=ir_train_idx, noise_dir=noise_train_idx, cpu=True)
     # val_augment = GPUTransformNeuralfpM2L(cfg=cfg, ir_dir=ir_val_idx, noise_dir=noise_val_idx, train=False).to(device)
@@ -154,14 +157,16 @@ def main():
                                             num_workers=1, 
                                             pin_memory=True, 
                                             drop_last=False,
-                                            sampler=dummy_db_sampler)
+                                            sampler=dummy_db_sampler,
+                                            collate_fn=neural_collate_fn)
     
     query_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=1, 
                                             shuffle=False,
                                             num_workers=1, 
                                             pin_memory=True, 
                                             drop_last=False,
-                                            sampler=query_db_sampler)
+                                            sampler=query_db_sampler,
+                                            collate_fn=neural_collate_fn)
     
 
     print("Creating new model...")

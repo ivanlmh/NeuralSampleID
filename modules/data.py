@@ -122,7 +122,7 @@ class NeuralfpDataset(Dataset):
                 x_j = x_j / norm_val
 
             if self.transform is not None:
-                x_i, x_j = self.transform(x_i, x_j)
+                x_i, x_j, transform_metadata = self.transform(x_i, x_j, metadata)
 
             if x_i is None or x_j is None:
                 return self[idx + 1]
