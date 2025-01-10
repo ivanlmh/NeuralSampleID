@@ -18,9 +18,18 @@ from util import (
 )
 
 def neural_collate_fn(batch):
-    x_i = torch.stack([item[0] for item in batch])
-    x_j = torch.stack([item[1] for item in batch])
-    metadata = [item[2] for item in batch]
+    """Collate function that can handle both training and validation data"""
+    # Check if we're in validation mode (second element is None)
+    if batch[0][1] is None:
+        # Validation/test mode
+        x_i = torch.stack([item[0] for item in batch])
+        metadata = [item[2] for item in batch]
+        return x_i, None, metadata
+    else:
+        # Training mode
+        x_i = torch.stack([item[0] for item in batch])
+        x_j = torch.stack([item[1] for item in batch])
+        metadata = [item[2] for item in batch]
     
     return x_i, x_j, metadata
 
@@ -41,6 +50,10 @@ class NeuralfpDataset(Dataset):
             self.stem = cfg["stem"]
         else:
             self.stem = None
+        self.keys_dir = cfg.get('train_keys_dir' if train else 'val_keys_dir', None)
+        self.key_data = None
+        if self.keys_dir:
+            self.key_data = np.load(self.keys_dir, allow_pickle=True)
 
         if train:
             self.filenames = load_index(cfg, path, mode="train", stem=self.stem)
@@ -50,6 +63,15 @@ class NeuralfpDataset(Dataset):
         print(f"Loaded {len(self.filenames)} files from {path}")
         self.ignore_idx = []
         self.error_counts = {}
+
+
+    def get_key_for_file(self, filepath):
+        if self.key_data is None:
+            return -1  # Unknown key
+        
+        # Extract relative path from full filepath to match key_data format
+        rel_path = '/'.join(filepath.split('/')[-2:])  # Gets "091/091869.mp3" format
+        return int(self.key_data.get(rel_path, -1))
 
     def __getitem__(self, idx):
         if idx in self.ignore_idx:
@@ -80,11 +102,13 @@ class NeuralfpDataset(Dataset):
             return self[idx + 1]
 
 
+        key = self.get_key_for_file(datapath)
         metadata = {
             'file_path': datapath,
             'idx': idx,
             'original_sr': sr,
-            'length': len(audio_resampled)
+            'length': len(audio_resampled),
+            'key': key
         }
 
 

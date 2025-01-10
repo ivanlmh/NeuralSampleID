@@ -11,7 +11,7 @@ from torchaudio.transforms import (
 )
 import warnings
 
-from pedalboard import Pedalboard, Chorus, Reverb, Distortion
+from pedalboard import Pedalboard, Chorus, Reverb, Distortion, PitchShift, time_stretch
 from music2latent import EncoderDecoder
 
 
@@ -353,7 +353,31 @@ class GPUTransformNeuralSampleid(nn.Module):
             AmplitudeToDB(),
         )
 
-    def process_audio_batch(self, batch_audio):
+
+    def get_transpose_semitones(self, from_key, to_key):
+        """
+        Calculate semitones needed to transpose from one key to another
+        
+        Keys 0-11 are major keys (A to G#)
+        Keys 12-23 are minor keys (B to Bb)
+        Key -1 is unknown
+        """
+        if from_key == -1 or to_key == -1:  # If either key is unknown
+            return 0
+
+        # Convert minor keys to their relative major
+        if from_key > 11:  # Minor key
+            from_key = (from_key - 7) % 12  # -7 to get relative major
+        if to_key > 11:
+            to_key = (to_key - 7) % 12
+            
+        # Calculate the smallest semitone difference needed
+        difference = (to_key - from_key) % 12
+        if difference > 6:
+            difference -= 12
+        return difference
+
+    def process_audio_batch(self, batch_audio, metadata):
         """Process a batch of audio with random effects and mixing"""
         batch_size = batch_audio.shape[0]
         processed_batch = []
@@ -376,15 +400,32 @@ class GPUTransformNeuralSampleid(nn.Module):
                 audio = board.process(audio, self.sample_rate)
             
             # Mix with another random sample from batch if desired
-            if torch.rand(1).item() < 0.9:
+            if torch.rand(1).item() < 0.95:
                 # Choose random sample from batch (not self)
                 other_idx = (i + torch.randint(1, batch_size, (1,)).item()) % batch_size
                 other_audio = batch_audio[other_idx].cpu().numpy()
+
+                # Get keys from metadata
+                main_key = metadata[i]['key']
+                other_key = metadata[other_idx]['key']
+                
+                # Transpose other audio to match main audio's key
+                semitones = self.get_transpose_semitones(other_key, main_key)
+                if semitones != 0:
+                    pitch_shifter = Pedalboard([PitchShift(semitones=semitones)])
+                    other_audio = pitch_shifter.process(other_audio, self.sample_rate)
                 
                 # Random gain between 0.1 and 0.7
                 gain = 0.05 + (0.45 * torch.rand(1).item())
                 audio = (1 - gain) * audio + (gain * other_audio)
             
+                # Update metadata to note the mixing
+                metadata[i].update({
+                    'mixed_with': metadata[other_idx]['file_path'],
+                    'transpose_semitones': semitones,
+                    'mix_gain': gain
+                })
+
             processed_batch.append(torch.from_numpy(audio))
         
         return torch.stack(processed_batch).to(batch_audio.device)
@@ -401,8 +442,8 @@ class GPUTransformNeuralSampleid(nn.Module):
 
         if self.train:
             # Process both sets of samples
-            x_i_processed = self.process_audio_batch(x_i)
-            x_j_processed = self.process_audio_batch(x_j)
+            x_i_processed = self.process_audio_batch(x_i, metadata)
+            x_j_processed = self.process_audio_batch(x_j, metadata)
             
             # Convert to mel spectrograms
             X_i = self.logmelspec(x_i_processed)
