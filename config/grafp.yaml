@@ -21,7 +21,7 @@ noise_dir: '/data/home/acw723/datasets/musan/noise/'
 # Model input parameters
 arch: 'grafp'
 fs: 16000
-dur: 1.0
+dur: 5.0 # for sampleID it should probably be over 5 seconds
 offset: 0.2
 norm: 0.95
 win_len: 1024
