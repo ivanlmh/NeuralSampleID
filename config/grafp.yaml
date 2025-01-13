@@ -46,7 +46,11 @@ T_max: 400
 lambda: 0.0
 error_threshold: 5
 
-stem: 'drums'
+# stem: 'drums'
+
+# SampleID train hyperparameters
+mix_prob: 0.95
+mix_gain_range: (0.05, 0.5)
 
 # Augmentation hyperparameters
 n_frames: 32 #10 #32 # depends on the spectrogram parameters (10 is for Music2latent)

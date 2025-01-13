@@ -309,37 +309,39 @@ class GPUTransformNeuralSampleid(nn.Module):
     Transform includes pedalboard effects and song mixing.
     Handles batched data and keeps track of song metadata.
     """
+
     def __init__(self, cfg, train=True, cpu=False):
         super(GPUTransformNeuralSampleid, self).__init__()
         self.sample_rate = cfg["fs"]
         self.train = train
         self.cpu = cpu
         self.cfg = cfg
-        
+
         # Define effects configuration
         self.effects_config = {
-            'chorus': {
-                'rate_hz': 1.0,
-                'depth': 0.25,
-                'centre_delay_ms': 7.0,
-                'feedback': 0.0,
-                'mix': 0.5
+            "chorus": {
+                "rate_hz": 1.0,
+                "depth": 0.25,
+                "centre_delay_ms": 7.0,
+                "feedback": 0.0,
+                "mix": 0.5,
             },
-            'reverb': {
-                'room_size': 0.8,
-                'damping': 0.1,
-                'wet_level': 0.5,
-                'dry_level': 0.5
+            "reverb": {
+                "room_size": 0.8,
+                "damping": 0.1,
+                "wet_level": 0.5,
+                "dry_level": 0.5,
             },
-            'distortion': {
-                'drive_db': 25
-            }
+            "distortion": {"drive_db": 20},
         }
-        
+
         # Create pedalboard effects
-        self.chorus = Chorus(**self.effects_config['chorus'])
-        self.reverb = Reverb(**self.effects_config['reverb'])
-        self.distortion = Distortion(**self.effects_config['distortion'])
+        self.chorus = Chorus(**self.effects_config["chorus"])
+        self.reverb = Reverb(**self.effects_config["reverb"])
+        self.distortion = Distortion(**self.effects_config["distortion"])
+
+        self.mix_prob = cfg.get("mix_prob", 0.95)
+        self.mix_gain_range = cfg.get("mix_gain_range", (0.05, 0.5))  # Narrower range
 
         # Keep melspec transform
         self.logmelspec = nn.Sequential(
@@ -353,11 +355,10 @@ class GPUTransformNeuralSampleid(nn.Module):
             AmplitudeToDB(),
         )
 
-
     def get_transpose_semitones(self, from_key, to_key):
         """
         Calculate semitones needed to transpose from one key to another
-        
+
         Keys 0-11 are major keys (A to G#)
         Keys 12-23 are minor keys (B to Bb)
         Key -1 is unknown
@@ -370,7 +371,7 @@ class GPUTransformNeuralSampleid(nn.Module):
             from_key = (from_key - 7) % 12  # -7 to get relative major
         if to_key > 11:
             to_key = (to_key - 7) % 12
-            
+
         # Calculate the smallest semitone difference needed
         difference = (to_key - from_key) % 12
         if difference > 6:
@@ -381,11 +382,11 @@ class GPUTransformNeuralSampleid(nn.Module):
         """Process a batch of audio with random effects and mixing"""
         batch_size = batch_audio.shape[0]
         processed_batch = []
-        
+
         for i in range(batch_size):
-            # Convert to numpy for pedalboard processing
-            audio = batch_audio[i].cpu().numpy()
-            
+            # Convert to numpy for pedalboard processing IS THIS NEEDED? I HOPE NOT
+            audio = batch_audio[i]  # .cpu().numpy()
+
             # Create random effect chain for this sample
             active_effects = []
             if torch.rand(1).item() < 0.5:
@@ -394,11 +395,11 @@ class GPUTransformNeuralSampleid(nn.Module):
                 active_effects.append(self.reverb)
             if torch.rand(1).item() < 0.5:
                 active_effects.append(self.distortion)
-            
+
             if active_effects:
                 board = Pedalboard(active_effects)
                 audio = board.process(audio, self.sample_rate)
-            
+
             # Mix with another random sample from batch if desired
             if torch.rand(1).item() < 0.95:
                 # Choose random sample from batch (not self)
@@ -406,28 +407,36 @@ class GPUTransformNeuralSampleid(nn.Module):
                 other_audio = batch_audio[other_idx].cpu().numpy()
 
                 # Get keys from metadata
-                main_key = metadata[i]['key']
-                other_key = metadata[other_idx]['key']
-                
+                main_key = metadata[i]["key"]
+                other_key = metadata[other_idx]["key"]
+
                 # Transpose other audio to match main audio's key
                 semitones = self.get_transpose_semitones(other_key, main_key)
                 if semitones != 0:
                     pitch_shifter = Pedalboard([PitchShift(semitones=semitones)])
                     other_audio = pitch_shifter.process(other_audio, self.sample_rate)
-                
-                # Random gain between 0.1 and 0.7
-                gain = 0.05 + (0.45 * torch.rand(1).item())
+
+                # Random gain between 0.05 and 0.5
+                gain = (
+                    torch.rand(1).item()
+                    * (self.mix_gain_range[1] - self.mix_gain_range[0])
+                    + self.mix_gain_range[0]
+                )
                 audio = (1 - gain) * audio + (gain * other_audio)
-            
+                # # normalize audio IS THIS NEEDED?
+                # audio = audio / torch.max(torch.abs(audio))
+
                 # Update metadata to note the mixing
-                metadata[i].update({
-                    'mixed_with': metadata[other_idx]['file_path'],
-                    'transpose_semitones': semitones,
-                    'mix_gain': gain
-                })
+                metadata[i].update(
+                    {
+                        "mixed_with": metadata[other_idx]["file_path"],
+                        "transpose_semitones": semitones,
+                        "mix_gain": gain,
+                    }
+                )
 
             processed_batch.append(torch.from_numpy(audio))
-        
+
         return torch.stack(processed_batch).to(batch_audio.device)
 
     def forward(self, x_i, x_j, metadata=None):
@@ -441,32 +450,40 @@ class GPUTransformNeuralSampleid(nn.Module):
             return x_i, x_j, metadata
 
         if self.train:
-            # Process both sets of samples
-            x_i_processed = self.process_audio_batch(x_i, metadata)
             x_j_processed = self.process_audio_batch(x_j, metadata)
-            
+
             # Convert to mel spectrograms
-            X_i = self.logmelspec(x_i_processed)
+            X_i = self.logmelspec(x_i)
+            # X_i = self.logmelspec(x_i_processed)
             X_j = self.logmelspec(x_j_processed)
-            
+            # X_i = x_i
+            # X_j = x_j_processed
+
             # Update metadata with mixing info if needed
             if metadata is not None:
                 for meta in metadata:
-                    meta['augmented'] = True
-            
+                    meta["augmented"] = True
+
             return X_i, X_j, metadata
 
         else:
-            # Validation mode
+            # Validation
+            # SHOULDNT THIS BE AUGMENTED?
             X_i = self.logmelspec(x_i.squeeze(0)).transpose(1, 0)
-            X_i = X_i.unfold(0, size=self.cfg['n_frames'], 
-                            step=int(self.cfg['n_frames'] * (1 - self.cfg['overlap'])))
+            X_i = X_i.unfold(
+                0,
+                size=self.cfg["n_frames"],
+                step=int(self.cfg["n_frames"] * (1 - self.cfg["overlap"])),
+            )
 
             if x_j is None:
                 return X_i, X_i, metadata
 
             X_j = self.logmelspec(x_j.squeeze(0)).transpose(1, 0)
-            X_j = X_j.unfold(0, size=self.cfg['n_frames'],
-                            step=int(self.cfg['n_frames'] * (1 - self.cfg['overlap'])))
+            X_j = X_j.unfold(
+                0,
+                size=self.cfg["n_frames"],
+                step=int(self.cfg["n_frames"] * (1 - self.cfg["overlap"])),
+            )
 
             return X_i, X_j, metadata
