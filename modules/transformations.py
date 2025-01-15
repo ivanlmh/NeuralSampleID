@@ -1,3 +1,5 @@
+import numpy as np
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -332,7 +334,7 @@ class GPUTransformNeuralSampleid(nn.Module):
                 "wet_level": 0.5,
                 "dry_level": 0.5,
             },
-            "distortion": {"drive_db": 20},
+            "distortion": {"drive_db": 15},
         }
 
         # Create pedalboard effects
@@ -340,8 +342,9 @@ class GPUTransformNeuralSampleid(nn.Module):
         self.reverb = Reverb(**self.effects_config["reverb"])
         self.distortion = Distortion(**self.effects_config["distortion"])
 
-        self.mix_prob = cfg.get("mix_prob", 0.95)
-        self.mix_gain_range = cfg.get("mix_gain_range", (0.05, 0.5))  # Narrower range
+        self.mix_prob = float(cfg.get("mix_prob", 0.95))
+        self.mix_gain_range = cfg.get("mix_gain", [0.05, 0.5])  # Narrower range
+        self.mix_gain_range = [float(i) for i in self.mix_gain_range]
 
         # Keep melspec transform
         self.logmelspec = nn.Sequential(
@@ -364,6 +367,9 @@ class GPUTransformNeuralSampleid(nn.Module):
         Key -1 is unknown
         """
         if from_key == -1 or to_key == -1:  # If either key is unknown
+            print(
+                "Warning: Unknown key when trying to calculate transpose, returning 0"
+            )
             return 0
 
         # Convert minor keys to their relative major
@@ -378,6 +384,28 @@ class GPUTransformNeuralSampleid(nn.Module):
             difference -= 12
         return difference
 
+    def analyze_tempo(self, beats_data):
+        """Calculate tempo and time between beats"""
+        if not beats_data or len(beats_data["times"]) < 2:
+            print("Warning: Missing beat data, when trying to calculate tempo")
+            return None
+
+        beat_times = beats_data["times"]
+        # intervals = np.diff(beat_times)
+        intervals = torch.diff(torch.tensor(beat_times))
+        # median_interval = np.median(intervals)
+        median_interval = torch.median(intervals)
+        tempo = 60.0 / median_interval
+
+        return {"tempo": tempo, "beat_interval": median_interval}
+
+    def get_tempo_ratio(self, source_tempo, target_tempo):
+        """Calculate ratio to match tempos"""
+        if not source_tempo or not target_tempo:
+            print("Warning: Missing tempo data, using 1.0 ratio")
+            return 1.0
+        return target_tempo / source_tempo
+
     def process_audio_batch(self, batch_audio, metadata):
         """Process a batch of audio with random effects and mixing"""
         batch_size = batch_audio.shape[0]
@@ -385,7 +413,7 @@ class GPUTransformNeuralSampleid(nn.Module):
 
         for i in range(batch_size):
             # Convert to numpy for pedalboard processing IS THIS NEEDED? I HOPE NOT
-            audio = batch_audio[i]  # .cpu().numpy()
+            audio = batch_audio[i].numpy()  # .cpu().numpy()
 
             # Create random effect chain for this sample
             active_effects = []
@@ -404,7 +432,7 @@ class GPUTransformNeuralSampleid(nn.Module):
             if torch.rand(1).item() < 0.95:
                 # Choose random sample from batch (not self)
                 other_idx = (i + torch.randint(1, batch_size, (1,)).item()) % batch_size
-                other_audio = batch_audio[other_idx].cpu().numpy()
+                other_audio = batch_audio[other_idx]  # .cpu().numpy()  # TODO: WHY CPU?
 
                 # Get keys from metadata
                 main_key = metadata[i]["key"]
@@ -412,9 +440,115 @@ class GPUTransformNeuralSampleid(nn.Module):
 
                 # Transpose other audio to match main audio's key
                 semitones = self.get_transpose_semitones(other_key, main_key)
-                if semitones != 0:
-                    pitch_shifter = Pedalboard([PitchShift(semitones=semitones)])
-                    other_audio = pitch_shifter.process(other_audio, self.sample_rate)
+                # Im transposing at the same time as time stretching
+                # if semitones != 0:
+                #     pitch_shifter = Pedalboard([PitchShift(semitones=semitones)])
+                #     other_audio = pitch_shifter.process(other_audio, self.sample_rate)
+
+                # Get beats information and segment start times
+                main_beats = metadata[i].get("beats")
+                other_beats = metadata[other_idx].get("beats")
+
+                # Start time of the segment in samples
+                main_start = metadata[i].get("start_i")
+                other_start = metadata[other_idx].get("start_j")
+
+                # Convert sample indices to seconds
+                main_start_sec = main_start / self.sample_rate
+                other_start_sec = other_start / self.sample_rate
+
+                print("Main start", main_start)
+                print("Other start", other_start)
+                print("Main start sec", main_start_sec)
+                print("Other start sec", other_start_sec)
+                print("Main beats", main_beats)
+                print("Other beats", other_beats)
+
+                # Cut beats to next beat after start until next after start+duration
+                first_beat_i = np.searchsorted(main_beats["times"], main_start_sec)
+                last_beat_i = np.searchsorted(
+                    main_beats["times"], main_start_sec + len(audio) / self.sample_rate
+                )
+                main_beats = {
+                    "times": (
+                        np.array(main_beats["times"][first_beat_i:last_beat_i])
+                        - main_start_sec
+                    ).tolist(),
+                    "numbers": main_beats["numbers"][first_beat_i:last_beat_i],
+                }
+
+                first_beat_i = np.searchsorted(other_beats["times"], other_start_sec)
+                last_beat_i = np.searchsorted(
+                    other_beats["times"],
+                    other_start_sec + len(audio) / self.sample_rate,
+                )
+                other_beats = {
+                    "times": (
+                        np.array(other_beats["times"][first_beat_i:last_beat_i])
+                        - other_start_sec
+                    ).tolist(),
+                    "numbers": other_beats["numbers"][first_beat_i:last_beat_i],
+                }
+
+                print("Main beats", main_beats)
+                print("Other beats", other_beats)
+
+                # Calculate tempos if we have beat information
+                main_tempo_data = self.analyze_tempo(main_beats)
+                other_tempo_data = self.analyze_tempo(other_beats)
+
+                # Handle beat synchronization
+                # if main_tempo_data and other_tempo_data:
+                # Calculate tempo ratio for time stretching
+                tempo_ratio = self.get_tempo_ratio(
+                    other_tempo_data["tempo"], main_tempo_data["tempo"]
+                )
+
+                # Time stretch using pedalboard if needed
+                if (
+                    abs(1 - tempo_ratio) > 0.02
+                ):  # Only stretch if difference is significant
+                    # Convert to audio segment and stretch
+                    other_audio = time_stretch(
+                        input_audio=other_audio,
+                        samplerate=self.sample_rate,
+                        stretch_factor=tempo_ratio,
+                        pitch_shift_in_semitones=semitones,
+                        high_quality=True,
+                        transient_mode="crisp",
+                        transient_detector="compound",
+                    )[0]
+
+                # Align first beats (beats["numbers"] are 1-indexed)
+                main_nearest_beat = main_beats["times"][main_beats["numbers"].index(1)]
+                other_nearest_beat = other_beats["times"][
+                    other_beats["numbers"].index(1)
+                ]
+
+                print("Main nearest beat", main_nearest_beat)
+                print("Other nearest beat", other_nearest_beat)
+
+                # Calculate offset needed to align beats
+                offset = int(
+                    (main_nearest_beat - other_nearest_beat) * self.sample_rate
+                )
+
+                # print all info to debug
+                print("Offset", offset)
+
+                # Apply offset and padding/trimming to same length
+                if offset > 0:
+                    other_audio = np.pad(other_audio, (offset, 0))
+                    other_audio = other_audio[: len(audio)]
+                elif offset < 0:
+                    other_audio = other_audio[-offset:]
+                    other_audio = np.pad(
+                        other_audio, (0, len(audio) - len(other_audio))
+                    )
+
+                # Normalize both audios before mixing
+                audio = audio / np.abs(audio).max() + 1e-8
+                other_audio = other_audio / np.abs(other_audio).max() + 1e-8
 
                 # Random gain between 0.05 and 0.5
                 gain = (
@@ -422,9 +556,10 @@ class GPUTransformNeuralSampleid(nn.Module):
                     * (self.mix_gain_range[1] - self.mix_gain_range[0])
                     + self.mix_gain_range[0]
                 )
-                audio = (1 - gain) * audio + (gain * other_audio)
-                # # normalize audio IS THIS NEEDED?
-                # audio = audio / torch.max(torch.abs(audio))
+                print("Audio shape", audio.shape)
+                print("Other audio shape", other_audio.shape)
+
+                audio = (1 - gain) * audio + gain * other_audio
 
                 # Update metadata to note the mixing
                 metadata[i].update(
@@ -432,9 +567,23 @@ class GPUTransformNeuralSampleid(nn.Module):
                         "mixed_with": metadata[other_idx]["file_path"],
                         "transpose_semitones": semitones,
                         "mix_gain": gain,
+                        "tempo_ratio": (
+                            tempo_ratio if main_tempo_data and other_tempo_data else 1.0
+                        ),
+                        "main_tempo": (
+                            main_tempo_data["tempo"] if main_tempo_data else None
+                        ),
+                        "other_tempo": (
+                            other_tempo_data["tempo"] if other_tempo_data else None
+                        ),
+                        "beat_offset_samples": (
+                            offset if main_beats and other_beats else None
+                        ),
                     }
                 )
 
+            # Normalize the final mix
+            audio = audio / np.abs(audio).max() + 1e-8
             processed_batch.append(torch.from_numpy(audio))
 
         return torch.stack(processed_batch).to(batch_audio.device)
@@ -453,11 +602,11 @@ class GPUTransformNeuralSampleid(nn.Module):
             x_j_processed = self.process_audio_batch(x_j, metadata)
 
             # Convert to mel spectrograms
-            X_i = self.logmelspec(x_i)
-            # X_i = self.logmelspec(x_i_processed)
-            X_j = self.logmelspec(x_j_processed)
-            # X_i = x_i
-            # X_j = x_j_processed
+            # X_i = self.logmelspec(x_i)
+            # # X_i = self.logmelspec(x_i_processed)
+            # X_j = self.logmelspec(x_j_processed)
+            X_i = x_i
+            X_j = x_j_processed
 
             # Update metadata with mixing info if needed
             if metadata is not None:

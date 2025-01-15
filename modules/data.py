@@ -17,6 +17,7 @@ from util import (
     qtile_norm,
 )
 
+
 def neural_collate_fn(batch):
     """Collate function that can handle both training and validation data"""
     # Check if we're in validation mode (second element is None)
@@ -30,7 +31,7 @@ def neural_collate_fn(batch):
         x_i = torch.stack([item[0] for item in batch])
         x_j = torch.stack([item[1] for item in batch])
         metadata = [item[2] for item in batch]
-    
+
     return x_i, x_j, metadata
 
 
@@ -50,10 +51,12 @@ class NeuralfpDataset(Dataset):
             self.stem = cfg["stem"]
         else:
             self.stem = None
-        self.keys_dir = cfg.get('train_keys_dir' if train else 'val_keys_dir', None)
+        self.keys_dir = cfg.get("train_keys_dir" if train else "val_keys_dir", None)
         self.key_data = None
         if self.keys_dir:
             self.key_data = np.load(self.keys_dir, allow_pickle=True)
+
+        self.beats_dir = cfg.get("train_beats_dir" if train else "val_beats_dir", None)
 
         if train:
             self.filenames = load_index(cfg, path, mode="train", stem=self.stem)
@@ -64,14 +67,39 @@ class NeuralfpDataset(Dataset):
         self.ignore_idx = []
         self.error_counts = {}
 
-
     def get_key_for_file(self, filepath):
         if self.key_data is None:
             return -1  # Unknown key
-        
+
         # Extract relative path from full filepath to match key_data format
-        rel_path = '/'.join(filepath.split('/')[-2:])  # Gets "091/091869.mp3" format
+        rel_path = "/".join(filepath.split("/")[-2:])  # Gets "091/091869.mp3" format
         return int(self.key_data.get(rel_path, -1))
+
+    def load_beats_file(self, filepath):
+        """Load beats file corresponding to audio file"""
+        # Convert audio filepath to beats filepath
+        # e.g. /path/to/000/000002.mp3 -> /path/to/beats/000/000002.beats
+        beats_path = os.path.join(
+            self.beats_dir,
+            os.path.basename(os.path.dirname(filepath)),
+            os.path.splitext(os.path.basename(filepath))[0] + ".beats",
+        )
+
+        if not os.path.exists(beats_path):
+            return None
+
+        # Load beats file
+        beats = []
+        beat_numbers = []
+        try:
+            with open(beats_path) as f:
+                for line in f:
+                    time, beat = line.strip().split("\t")
+                    beats.append(float(time))
+                    beat_numbers.append(int(beat))
+            return {"times": beats, "numbers": beat_numbers}
+        except:
+            return None
 
     def __getitem__(self, idx):
         if idx in self.ignore_idx:
@@ -101,16 +129,16 @@ class NeuralfpDataset(Dataset):
             # self.ignore_idx.append(idx)
             return self[idx + 1]
 
-
         key = self.get_key_for_file(datapath)
+        beats = self.load_beats_file(datapath)
         metadata = {
-            'file_path': datapath,
-            'idx': idx,
-            'original_sr': sr,
-            'length': len(audio_resampled),
-            'key': key
+            "file_path": datapath,
+            "idx": idx,
+            "original_sr": sr,
+            "length": len(audio_resampled),
+            "key": key,
+            "beats": beats,
         }
-
 
         #   For training pipeline, output a random frame of the audio
         if self.train:
@@ -125,11 +153,9 @@ class NeuralfpDataset(Dataset):
             rj = np.random.randint(0, offset_mod - clip_frames)
 
             # Add timestamps to metadata
-            metadata.update({
-                'start_i': r + ri,
-                'start_j': r + rj,
-                'clip_length': clip_frames
-            })
+            metadata.update(
+                {"start_i": r + ri, "start_j": r + rj, "clip_length": clip_frames}
+            )
 
             clip_i = a_i[r : r + offset_mod]
             clip_j = a_j[r : r + offset_mod]
