@@ -343,7 +343,7 @@ class GPUTransformNeuralSampleid(nn.Module):
         self.distortion = Distortion(**self.effects_config["distortion"])
 
         self.mix_prob = float(cfg.get("mix_prob", 0.95))
-        self.mix_gain_range = cfg.get("mix_gain", [0.05, 0.5])  # Narrower range
+        self.mix_gain_range = cfg.get("mix_gain_range", [0.05, 0.5])  # Narrower range
         self.mix_gain_range = [float(i) for i in self.mix_gain_range]
 
         # Keep melspec transform
@@ -457,12 +457,12 @@ class GPUTransformNeuralSampleid(nn.Module):
                 main_start_sec = main_start / self.sample_rate
                 other_start_sec = other_start / self.sample_rate
 
-                print("Main start", main_start)
-                print("Other start", other_start)
-                print("Main start sec", main_start_sec)
-                print("Other start sec", other_start_sec)
-                print("Main beats", main_beats)
-                print("Other beats", other_beats)
+                # print("Main start", main_start)
+                # print("Other start", other_start)
+                # print("Main start sec", main_start_sec)
+                # print("Other start sec", other_start_sec)
+                # print("Main beats", main_beats)
+                # print("Other beats", other_beats)
 
                 # Cut beats to next beat after start until next after start+duration
                 first_beat_i = np.searchsorted(main_beats["times"], main_start_sec)
@@ -490,8 +490,8 @@ class GPUTransformNeuralSampleid(nn.Module):
                     "numbers": other_beats["numbers"][first_beat_i:last_beat_i],
                 }
 
-                print("Main beats", main_beats)
-                print("Other beats", other_beats)
+                # print("Main beats", main_beats)
+                # print("Other beats", other_beats)
 
                 # Calculate tempos if we have beat information
                 main_tempo_data = self.analyze_tempo(main_beats)
@@ -518,6 +518,10 @@ class GPUTransformNeuralSampleid(nn.Module):
                         transient_mode="crisp",
                         transient_detector="compound",
                     )[0]
+                    # Stretch beats times
+                    other_beats["times"] = [
+                        t * tempo_ratio for t in other_beats["times"]
+                    ]
 
                 # Align first beats (beats["numbers"] are 1-indexed)
                 main_nearest_beat = main_beats["times"][main_beats["numbers"].index(1)]
@@ -525,26 +529,38 @@ class GPUTransformNeuralSampleid(nn.Module):
                     other_beats["numbers"].index(1)
                 ]
 
-                print("Main nearest beat", main_nearest_beat)
-                print("Other nearest beat", other_nearest_beat)
+                # print("Main nearest beat", main_nearest_beat)
+                # print("Other nearest beat", other_nearest_beat)
 
                 # Calculate offset needed to align beats
                 offset = int(
                     (main_nearest_beat - other_nearest_beat) * self.sample_rate
                 )
 
-                # print all info to debug
-                print("Offset", offset)
+                # print("Offset", offset)
 
                 # Apply offset and padding/trimming to same length
+                target_length = len(audio)
                 if offset > 0:
+                    # Add offset zeros at the start
                     other_audio = np.pad(other_audio, (offset, 0))
-                    other_audio = other_audio[: len(audio)]
+                    # Then trim/pad to target length
+                    if len(other_audio) > target_length:
+                        other_audio = other_audio[:target_length]
+                    else:
+                        other_audio = np.pad(
+                            other_audio, (0, target_length - len(other_audio))
+                        )
                 elif offset < 0:
                     other_audio = other_audio[-offset:]
-                    other_audio = np.pad(
-                        other_audio, (0, len(audio) - len(other_audio))
-                    )
+                    if len(other_audio) > target_length:
+                        # If longer than target, trim the end
+                        other_audio = other_audio[:target_length]
+                    else:
+                        # If shorter than target, pad the end
+                        other_audio = np.pad(
+                            other_audio, (0, target_length - len(other_audio))
+                        )
 
                 # Normalize both audios before mixing
                 audio = audio / np.abs(audio).max() + 1e-8
@@ -556,8 +572,9 @@ class GPUTransformNeuralSampleid(nn.Module):
                     * (self.mix_gain_range[1] - self.mix_gain_range[0])
                     + self.mix_gain_range[0]
                 )
-                print("Audio shape", audio.shape)
-                print("Other audio shape", other_audio.shape)
+                # print("Audio shape", audio.shape)
+                # print("Other audio shape", other_audio.shape)
+                # print("Gain", gain)
 
                 audio = (1 - gain) * audio + gain * other_audio
 
@@ -602,11 +619,11 @@ class GPUTransformNeuralSampleid(nn.Module):
             x_j_processed = self.process_audio_batch(x_j, metadata)
 
             # Convert to mel spectrograms
-            # X_i = self.logmelspec(x_i)
-            # # X_i = self.logmelspec(x_i_processed)
-            # X_j = self.logmelspec(x_j_processed)
-            X_i = x_i
-            X_j = x_j_processed
+            X_i = self.logmelspec(x_i)
+            # X_i = self.logmelspec(x_i_processed)
+            X_j = self.logmelspec(x_j_processed)
+            # X_i = x_i
+            # X_j = x_j_processed
 
             # Update metadata with mixing info if needed
             if metadata is not None:
