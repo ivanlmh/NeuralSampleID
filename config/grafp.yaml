@@ -55,6 +55,7 @@ error_threshold: 5
 # SampleID train hyperparameters
 mix_prob: 0.95
 mix_gain_range: [0.05, 0.55]
+min_beats_required: 32 # minimum number of beats required in a sample to be included in the dataset
 
 # Augmentation hyperparameters
 n_frames: 32 #10 #32 # depends on the spectrogram parameters (10 is for Music2latent)

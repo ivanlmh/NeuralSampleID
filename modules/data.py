@@ -57,11 +57,32 @@ class NeuralfpDataset(Dataset):
             self.key_data = np.load(self.keys_dir, allow_pickle=True)
 
         self.beats_dir = cfg.get("train_beats_dir" if train else "val_beats_dir", None)
+        self.min_beats_required = int(cfg.get("min_beats_required", 0))
 
         if train:
             self.filenames = load_index(cfg, path, mode="train", stem=self.stem)
         else:
             self.filenames = load_index(cfg, path, mode="valid", stem=self.stem)
+
+        # Filter out files with insufficient beats
+        if self.beats_dir:
+            filtered_filenames = {}
+            original_count = len(self.filenames)
+            new_idx = 0  # Keep track of new continuous indices
+            for idx, filepath in self.filenames.items():
+                beats_data = self.load_beats_file(filepath)
+                if (
+                    beats_data is not None
+                    and len(beats_data["times"]) >= self.min_beats_required
+                ):
+                    filtered_filenames[str(new_idx)] = (
+                        filepath  # Use str(new_idx) as key
+                    )
+                    new_idx += 1
+            self.filenames = filtered_filenames
+            print(
+                f"Filtered out {original_count - len(self.filenames)} files with insufficient beats"
+            )
 
         print(f"Loaded {len(self.filenames)} files from {path}")
         self.ignore_idx = []
@@ -147,7 +168,10 @@ class NeuralfpDataset(Dataset):
 
             offset_mod = int(self.sample_rate * (self.offset) + clip_frames)
             if len(audio_resampled) < offset_mod:
-                print(len(audio_resampled), offset_mod)
+                print(
+                    "Audio too short (offset_mod > len(audio resampled)). Skipping..."
+                )
+                return self[idx + 1]
             r = np.random.randint(0, len(audio_resampled) - offset_mod)
             ri = np.random.randint(0, offset_mod - clip_frames)
             rj = np.random.randint(0, offset_mod - clip_frames)
