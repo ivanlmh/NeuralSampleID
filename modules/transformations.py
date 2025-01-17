@@ -508,73 +508,87 @@ class GPUTransformNeuralSampleid(nn.Module):
                 # print("Main beats", main_beats)
                 # print("Other beats", other_beats)
 
-                # Calculate tempos if we have beat information
-                main_tempo_data = self.analyze_tempo(main_beats)
-                other_tempo_data = self.analyze_tempo(other_beats)
 
-                # Handle beat synchronization
-                # if main_tempo_data and other_tempo_data:
-                # Calculate tempo ratio for time stretching
-                tempo_ratio = self.get_tempo_ratio(
-                    other_tempo_data["tempo"], main_tempo_data["tempo"]
-                )
-                # If tempo_ratio is a tensor, convert to float
-                if isinstance(tempo_ratio, torch.Tensor):
-                    tempo_ratio = tempo_ratio.item()
+                # If we have more than 2 beats, calculate tempo and time stretch
+                if len(main_beats["times"]) > 2 and len(other_beats["times"]) > 2:
+                    # Calculate tempos if we have beat information
+                    main_tempo_data = self.analyze_tempo(main_beats)
+                    other_tempo_data = self.analyze_tempo(other_beats)
 
-                # Time stretch using pedalboard if needed
-                if (
-                    abs(1 - tempo_ratio) > 0.02
-                ):  # Only stretch if difference is significant
-                    # Convert to audio segment and stretch
-                    other_audio = time_stretch(
-                        input_audio=other_audio,
-                        samplerate=self.sample_rate,
-                        stretch_factor=tempo_ratio,
-                        pitch_shift_in_semitones=semitones,
-                        high_quality=True,
-                        transient_mode="crisp",
-                        transient_detector="compound",
-                    )[0]
-                    # Stretch beats times
-                    other_beats["times"] = [
-                        t * tempo_ratio for t in other_beats["times"]
-                    ]
+                    # Handle beat synchronization
+                    # if main_tempo_data and other_tempo_data:
+                    # Calculate tempo ratio for time stretching
+                    tempo_ratio = self.get_tempo_ratio(
+                        other_tempo_data["tempo"], main_tempo_data["tempo"]
+                    )
+                    # If tempo_ratio is a tensor, convert to float
+                    if isinstance(tempo_ratio, torch.Tensor):
+                        tempo_ratio = tempo_ratio.item()
 
-                # Find alignment points (downbeats or first beats)
-                main_nearest_beat, other_nearest_beat = self.find_alignment_beats(main_beats, other_beats)
-    
-                # print("Main nearest beat", main_nearest_beat)
-                # print("Other nearest beat", other_nearest_beat)
+                    # Time stretch using pedalboard if needed
+                    if (
+                        abs(1 - tempo_ratio) > 0.02
+                    ):  # Only stretch if difference is significant
+                        # Convert to audio segment and stretch
+                        other_audio = time_stretch(
+                            input_audio=other_audio,
+                            samplerate=self.sample_rate,
+                            stretch_factor=tempo_ratio,
+                            pitch_shift_in_semitones=semitones,
+                            high_quality=True,
+                            transient_mode="crisp",
+                            transient_detector="compound",
+                        )[0]
+                        # Stretch beats times
+                        other_beats["times"] = [
+                            t * tempo_ratio for t in other_beats["times"]
+                        ]
 
-                # Calculate offset needed to align beats
-                offset = int(
-                    (main_nearest_beat - other_nearest_beat) * self.sample_rate
-                )
+                    # Find alignment points (downbeats or first beats)
+                    main_nearest_beat, other_nearest_beat = self.find_alignment_beats(main_beats, other_beats)
+        
+                    # print("Main nearest beat", main_nearest_beat)
+                    # print("Other nearest beat", other_nearest_beat)
 
-                # print("Offset", offset)
+                    # Calculate offset needed to align beats
+                    offset = int(
+                        (main_nearest_beat - other_nearest_beat) * self.sample_rate
+                    )
 
-                # Apply offset and padding/trimming to same length
-                target_length = len(audio)
-                if offset > 0:
-                    # Add offset zeros at the start
-                    other_audio = np.pad(other_audio, (offset, 0))
-                    # Then trim/pad to target length
-                    if len(other_audio) > target_length:
-                        other_audio = other_audio[:target_length]
-                    else:
-                        other_audio = np.pad(
-                            other_audio, (0, target_length - len(other_audio))
-                        )
-                elif offset < 0:
-                    other_audio = other_audio[-offset:]
-                    if len(other_audio) > target_length:
-                        # If longer than target, trim the end
-                        other_audio = other_audio[:target_length]
-                    else:
-                        # If shorter than target, pad the end
-                        other_audio = np.pad(
-                            other_audio, (0, target_length - len(other_audio))
+                    # print("Offset", offset)
+
+                    # Apply offset and padding/trimming to same length
+                    target_length = len(audio)
+                    if offset > 0:
+                        # Add offset zeros at the start
+                        other_audio = np.pad(other_audio, (offset, 0))
+                        # Then trim/pad to target length
+                        if len(other_audio) > target_length:
+                            other_audio = other_audio[:target_length]
+                        else:
+                            other_audio = np.pad(
+                                other_audio, (0, target_length - len(other_audio))
+                            )
+                    elif offset < 0:
+                        other_audio = other_audio[-offset:]
+                        if len(other_audio) > target_length:
+                            # If longer than target, trim the end
+                            other_audio = other_audio[:target_length]
+                        else:
+                            # If shorter than target, pad the end
+                            other_audio = np.pad(
+                                other_audio, (0, target_length - len(other_audio))
+                            )
+                else:
+                    # If we don't have enough beats, just transpose and mix
+                    print(
+                        "Warning: Not enough beats in one of the segments to calculate tempo, transposing only"
+                    )
+                    # Transpose other audio to match main audio's key
+                    if semitones != 0:
+                        pitch_shifter = Pedalboard([PitchShift(semitones=semitones)])
+                        other_audio = pitch_shifter.process(
+                            other_audio, self.sample_rate
                         )
 
                 # Normalize both audios before mixing
