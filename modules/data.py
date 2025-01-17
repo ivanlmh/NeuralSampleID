@@ -64,13 +64,17 @@ class NeuralfpDataset(Dataset):
         else:
             self.filenames = load_index(cfg, path, mode="valid", stem=self.stem)
 
+
+        print(f"Initial file count: {len(self.filenames)} files from {path}")
+
+
         # Filter out files with insufficient beats
         if self.beats_dir:
             filtered_filenames = {}
             original_count = len(self.filenames)
             new_idx = 0  # Keep track of new continuous indices
             for idx, filepath in self.filenames.items():
-                beats_data = self.load_beats_file(filepath)
+                beats_data = self.load_beats_file(filepath, train)
                 if (
                     beats_data is not None
                     and len(beats_data["times"]) >= self.min_beats_required
@@ -96,17 +100,27 @@ class NeuralfpDataset(Dataset):
         rel_path = "/".join(filepath.split("/")[-2:])  # Gets "091/091869.mp3" format
         return int(self.key_data.get(rel_path, -1))
 
-    def load_beats_file(self, filepath):
+    def load_beats_file(self, filepath, train=True):
         """Load beats file corresponding to audio file"""
         # Convert audio filepath to beats filepath
-        # e.g. /path/to/000/000002.mp3 -> /path/to/beats/000/000002.beats
-        beats_path = os.path.join(
-            self.beats_dir,
-            os.path.basename(os.path.dirname(filepath)),
-            os.path.splitext(os.path.basename(filepath))[0] + ".beats",
-        )
+        # TODO: This has to be reviewed for stem-separated files (in demucs)
+        if train:
+            # e.g. /path/to/000/000002.mp3 -> /path/to/beats/000/000002.beats
+            beats_path = os.path.join(
+                self.beats_dir,
+                os.path.basename(os.path.dirname(filepath)),
+                os.path.splitext(os.path.basename(filepath))[0] + ".beats",
+            )
+        else:
+            # e.g. /path/to/audio/N003.mp3 -> /path/to/beats/N003.beats
+            beats_path = os.path.join(
+                self.beats_dir,
+                os.path.splitext(os.path.basename(filepath))[0] + ".beats",
+            )
 
+        # print(f"Looking for beats file at: {beats_path}")
         if not os.path.exists(beats_path):
+            print(f"Beats file not found: {beats_path}")
             return None
 
         # Load beats file
@@ -151,7 +165,7 @@ class NeuralfpDataset(Dataset):
             return self[idx + 1]
 
         key = self.get_key_for_file(datapath)
-        beats = self.load_beats_file(datapath)
+        beats = self.load_beats_file(datapath, self.train)
         metadata = {
             "file_path": datapath,
             "idx": idx,

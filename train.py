@@ -53,7 +53,7 @@ parser.add_argument('--k', default=3, type=int)
 
 
 
-def train(cfg, train_loader, model, optimizer, scaler, ir_idx, noise_idx, augment=None):
+def train(cfg, train_loader, model, optimizer, scaler, ir_idx=None, noise_idx=None, augment=None):
     model.train()
     loss_epoch = 0
     # return loss_epoch
@@ -117,10 +117,10 @@ def main():
     shuffle_dataset = True
 
     print("Intializing augmentation pipeline...")
-    noise_train_idx = load_augmentation_index(noise_dir, splits=0.8)["train"]
-    ir_train_idx = load_augmentation_index(ir_dir, splits=0.8)["train"]
-    noise_val_idx = load_augmentation_index(noise_dir, splits=0.8)["test"]
-    ir_val_idx = load_augmentation_index(ir_dir, splits=0.8)["test"]
+    # noise_train_idx = load_augmentation_index(noise_dir, splits=0.8)["train"]
+    # ir_train_idx = load_augmentation_index(ir_dir, splits=0.8)["train"]
+    # noise_val_idx = load_augmentation_index(noise_dir, splits=0.8)["test"]
+    # ir_val_idx = load_augmentation_index(ir_dir, splits=0.8)["test"]
     gpu_augment = GPUTransformNeuralSampleid(cfg=cfg, train=True).to(device)
     cpu_augment = GPUTransformNeuralSampleid(cfg=cfg, cpu=True)
     val_augment = GPUTransformNeuralSampleid(cfg=cfg, train=False).to(device)
@@ -132,7 +132,7 @@ def main():
     # val_augment = GPUTransformNeuralfpM2L(cfg=cfg, ir_dir=ir_val_idx, noise_dir=noise_val_idx, train=False).to(device)
 
     print("Loading dataset...")
-    train_dataset = NeuralfpDataset(cfg=cfg, path=train_dir, train=True, transform=cpu_augment)
+    train_dataset = NeuralfpDataset(cfg=cfg, path=train_dir, train=True)#, transform=cpu_augment)
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=batch_size, shuffle=True,
         num_workers=8, pin_memory=True, drop_last=True, collate_fn=neural_collate_fn)
@@ -212,7 +212,7 @@ def main():
 
     for epoch in range(start_epoch+1, num_epochs+1):
         print("#######Epoch {}#######".format(epoch))
-        loss_epoch = train(cfg, train_loader, model, optimizer, scaler, ir_train_idx, noise_train_idx, gpu_augment)
+        loss_epoch = train(cfg, train_loader, model, optimizer, scaler, augment=gpu_augment)#ir_train_idx, noise_train_idx, gpu_augment)
         writer.add_scalar("Loss/train", loss_epoch, epoch)
         loss_log.append(loss_epoch)
         output_root_dir = create_fp_dir(ckp=args.ckp, epoch=epoch)

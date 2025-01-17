@@ -23,7 +23,6 @@ class DummyScaler:
 def load_index(
     cfg, data_dir, ext=["mp3"], shuffle_dataset=True, mode="train", stem=None
 ):  # "wav", "mp3"], shuffle_dataset=True, mode="train"):
-
     if data_dir.endswith(".json"):
         print(f"=>Loading indices from index file {data_dir}")
         with open(data_dir, "r") as fp:
@@ -35,6 +34,7 @@ def load_index(
         raise FileNotFoundError(f"Directory {data_dir} not found")
 
     if stem is None:
+        # json path for saving indices
         json_path = os.path.join(
             cfg["data_dir"], os.path.normpath(data_dir.split("/")[-1]) + ".json"
         )
@@ -54,7 +54,12 @@ def load_index(
     fpaths = [p for p in fpaths if p.split(".")[-1] in ext]
 
     if stem is not None:
+        print(f"Filtering files with stem {stem}")
         fpaths = [p for p in fpaths if stem in p]
+    else:
+        # If no stem is specified, discard files in htdemucs subdirectory
+        print("No stem specified, discarding htdemucs files")
+        fpaths = [p for p in fpaths if "htdemucs" not in p]
 
     dataset_size = len(fpaths)
     indices = list(range(dataset_size))
@@ -77,6 +82,7 @@ def load_index(
 def load_sample100_index(
     cfg, data_dir, ext=["mp3"], shuffle_dataset=True, mode="train"
 ):  # , mode="train"):
+    print("Called load_sample100_index with:", data_dir)
     # verify data_dir is called sample_100, has an audio subdirectory and a samples.csv file
     if not os.path.exists(data_dir):
         raise FileNotFoundError(f"Directory {data_dir} not found")
