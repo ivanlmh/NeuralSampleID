@@ -406,6 +406,21 @@ class GPUTransformNeuralSampleid(nn.Module):
             return 1.0
         return target_tempo / source_tempo
 
+    def find_alignment_beats(self, main_beats, other_beats):
+        """
+        Try to find downbeats (beat 1) in both segments, fall back to first beats if not found.
+        Returns tuple of (main_beat_time, other_beat_time)
+        """
+        try:
+            # Try to find downbeats first
+            main_idx = main_beats["numbers"].index(1)
+            other_idx = other_beats["numbers"].index(1)
+            return main_beats["times"][main_idx], other_beats["times"][other_idx]
+        except ValueError:
+            # If no downbeat found, use first available beats
+            print("Warning: No downbeat found in one or both segments, using first beats")
+            return main_beats["times"][0], other_beats["times"][0]
+
     def process_audio_batch(self, batch_audio, metadata):
         """Process a batch of audio with random effects and mixing"""
         batch_size = batch_audio.shape[0]
@@ -413,7 +428,7 @@ class GPUTransformNeuralSampleid(nn.Module):
 
         for i in range(batch_size):
             # Convert to numpy for pedalboard processing IS THIS NEEDED? I HOPE NOT
-            audio = batch_audio[i].numpy()  # .cpu().numpy()
+            audio = batch_audio[i].cpu().numpy()  # .cpu().numpy()
 
             # Create random effect chain for this sample
             active_effects = []
@@ -432,7 +447,7 @@ class GPUTransformNeuralSampleid(nn.Module):
             if torch.rand(1).item() < 0.95:
                 # Choose random sample from batch (not self)
                 other_idx = (i + torch.randint(1, batch_size, (1,)).item()) % batch_size
-                other_audio = batch_audio[other_idx]  # .cpu().numpy()  # TODO: WHY CPU?
+                other_audio = batch_audio[other_idx].cpu().numpy()  # TODO: WHY CPU?
 
                 # Get keys from metadata
                 main_key = metadata[i]["key"]
@@ -503,6 +518,9 @@ class GPUTransformNeuralSampleid(nn.Module):
                 tempo_ratio = self.get_tempo_ratio(
                     other_tempo_data["tempo"], main_tempo_data["tempo"]
                 )
+                # If tempo_ratio is a tensor, convert to float
+                if isinstance(tempo_ratio, torch.Tensor):
+                    tempo_ratio = tempo_ratio.item()
 
                 # Time stretch using pedalboard if needed
                 if (
@@ -523,12 +541,9 @@ class GPUTransformNeuralSampleid(nn.Module):
                         t * tempo_ratio for t in other_beats["times"]
                     ]
 
-                # Align first beats (beats["numbers"] are 1-indexed)
-                main_nearest_beat = main_beats["times"][main_beats["numbers"].index(1)]
-                other_nearest_beat = other_beats["times"][
-                    other_beats["numbers"].index(1)
-                ]
-
+                # Find alignment points (downbeats or first beats)
+                main_nearest_beat, other_nearest_beat = self.find_alignment_beats(main_beats, other_beats)
+    
                 # print("Main nearest beat", main_nearest_beat)
                 # print("Other nearest beat", other_nearest_beat)
 
