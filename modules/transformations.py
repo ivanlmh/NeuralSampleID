@@ -404,7 +404,16 @@ class GPUTransformNeuralSampleid(nn.Module):
         if not source_tempo or not target_tempo:
             print("Warning: Missing tempo data, using 1.0 ratio")
             return 1.0
-        return target_tempo / source_tempo
+
+        raw_ratio = target_tempo / source_tempo
+        
+        # Find the closest power of 2 multiple/divisor that keeps ratio between 0.5 and 2.0
+        while raw_ratio > 2.0:
+            raw_ratio /= 2.0
+        while raw_ratio < 0.5:
+            raw_ratio *= 2.0
+            
+        return raw_ratio
 
     def find_alignment_beats(self, main_beats, other_beats):
         """
@@ -508,7 +517,7 @@ class GPUTransformNeuralSampleid(nn.Module):
                 # print("Main beats", main_beats)
                 # print("Other beats", other_beats)
 
-
+                tempo_ratio = 1.0
                 # If we have more than 2 beats, calculate tempo and time stretch
                 if len(main_beats["times"]) > 2 and len(other_beats["times"]) > 2:
                     # Calculate tempos if we have beat information
@@ -613,9 +622,7 @@ class GPUTransformNeuralSampleid(nn.Module):
                         "mixed_with": metadata[other_idx]["file_path"],
                         "transpose_semitones": semitones,
                         "mix_gain": gain,
-                        "tempo_ratio": (
-                            tempo_ratio if main_tempo_data and other_tempo_data else 1.0
-                        ),
+                        "tempo_ratio": tempo_ratio,
                         "main_tempo": (
                             main_tempo_data["tempo"] if main_tempo_data else None
                         ),
@@ -629,7 +636,7 @@ class GPUTransformNeuralSampleid(nn.Module):
                 )
 
             # Normalize the final mix
-            audio = audio / np.abs(audio).max() + 1e-8
+            audio = (audio / np.abs(audio).max() + 1e-8)
             processed_batch.append(torch.from_numpy(audio))
 
         return torch.stack(processed_batch).to(batch_audio.device)
