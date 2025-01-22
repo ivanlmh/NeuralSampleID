@@ -75,6 +75,9 @@ def train(cfg, train_loader, model, optimizer, scaler, ir_idx=None, noise_idx=No
         loss = ntxent_loss(z_i, z_j, cfg) + l1_loss
 
         scaler.scale(loss).backward()
+
+        # Add gradient clipping
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
         scaler.step(optimizer)
         scaler.update()
 

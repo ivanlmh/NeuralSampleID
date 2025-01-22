@@ -588,17 +588,28 @@ class GPUTransformNeuralSampleid(nn.Module):
                             other_audio = np.pad(
                                 other_audio, (0, target_length - len(other_audio))
                             )
+                    
+                    # Verify lengths match before mixing
+                    assert len(audio) == len(other_audio), f"Length mismatch: {len(audio)} vs {len(other_audio)}, after messing with time stretch"
+
                 else:
                     # If we don't have enough beats, just transpose and mix
                     print(
                         "Warning: Not enough beats in one of the segments to calculate tempo, transposing only"
                     )
+
+                    main_tempo_data = None
+                    other_tempo_data = None
+                    offset = None
                     # Transpose other audio to match main audio's key
                     if semitones != 0:
                         pitch_shifter = Pedalboard([PitchShift(semitones=semitones)])
                         other_audio = pitch_shifter.process(
                             other_audio, self.sample_rate
                         )
+                    # Verify lengths match before mixing
+                    assert len(audio) == len(other_audio), f"Length mismatch: {len(audio)} vs {len(other_audio)}, WITHOUT messing with time stretch"
+
 
                 # Normalize both audios before mixing
                 audio = audio / np.abs(audio).max() + 1e-8
@@ -654,12 +665,25 @@ class GPUTransformNeuralSampleid(nn.Module):
         if self.train:
             x_j_processed = self.process_audio_batch(x_j, metadata)
 
+
+            # Add safety checks
+            if torch.isnan(x_j_processed).any():
+                print("Warning: NaN detected in processed batch")
+                # Return original audio as fallback
+                x_j_processed = x_j
+
+
             # Convert to mel spectrograms
             X_i = self.logmelspec(x_i)
             # X_i = self.logmelspec(x_i_processed)
             X_j = self.logmelspec(x_j_processed)
             # X_i = x_i
             # X_j = x_j_processed
+
+
+            # Add more safety checks
+            if torch.isnan(X_i).any() or torch.isnan(X_j).any():
+                print("Warning: NaN detected in spectrograms")
 
             # Update metadata with mixing info if needed
             if metadata is not None:
