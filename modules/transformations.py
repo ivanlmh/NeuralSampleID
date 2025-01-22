@@ -568,7 +568,7 @@ class GPUTransformNeuralSampleid(nn.Module):
 
                     # Apply offset and padding/trimming to same length
                     target_length = len(audio)
-                    if offset > 0:
+                    if offset >= 0:
                         # Add offset zeros at the start
                         other_audio = np.pad(other_audio, (offset, 0))
                         # Then trim/pad to target length
@@ -590,7 +590,7 @@ class GPUTransformNeuralSampleid(nn.Module):
                             )
                     
                     # Verify lengths match before mixing
-                    assert len(audio) == len(other_audio), f"Length mismatch: {len(audio)} vs {len(other_audio)}, after messing with time stretch"
+                    assert len(audio) == len(other_audio), f"Length mismatch: {len(audio)} vs {len(other_audio)}, after messing with time stretch. Offset was: {offset}."
 
                 else:
                     # If we don't have enough beats, just transpose and mix
