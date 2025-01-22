@@ -38,8 +38,8 @@ noise_dir: '/home/ivanmeresman-higgs/Documents/QueenMary/noise'
 # Model input parameters
 arch: 'grafp'
 fs: 16000
-dur: 5.0 # for sampleID it should probably be over 5 seconds
-offset: 0.2
+dur: 4.0 # for sampleID it should probably be over 5 seconds
+offset: 0.25
 norm: 0.95
 win_len: 1024
 hop_len: 512
@@ -52,11 +52,13 @@ blur_kernel: [7,7]  # blur kernel size
 # Dataset and Model hyperparameters
 train_sz: 8000
 val_sz: 25000
-bsz_train: 256
-peak_stride: 2
+bsz_train: 256 #32 #256 # Batch size
+# peak_stride: 2
 n_filters : 8 # number of filters in the peak extraction layer
+patch_frames: 8
+patch_bins: 4
 tau: 0.05
-lr: 8.0e-5
+lr: 1.0e-5 #8.0e-5
 min_lr: 7.0e-7
 n_epochs: 400
 T_max: 400
@@ -71,8 +73,8 @@ mix_gain_range: [0.05, 0.55]
 min_beats_required: 32 # minimum number of beats required in a sample to be included in the dataset
 
 # Augmentation hyperparameters
-n_frames: 32 #10 #32 # depends on the spectrogram parameters (10 is for Music2latent)
-overlap: 0.5
+n_frames: 128 #10 #32 # depends on the spectrogram parameters (10 is for Music2latent), old nerualFP was 32, now 128 apparently
+overlap: 0.875 #0.5
 tr_snr: [0, 20]
 val_snr: [0, 10]
 test_snr: [19, 21]
