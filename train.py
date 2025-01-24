@@ -198,6 +198,7 @@ def main():
             print("=> loading checkpoint '{}'".format(args.resume))
             model, optimizer, scheduler, start_epoch, loss_log, hit_rate_log = load_ckp(args.resume, model, optimizer, scheduler)
             output_root_dir = create_fp_dir(resume=args.resume)
+            writer = SummaryWriter(f'runs/{args.ckp}', purge_step=start_epoch)
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
             
