@@ -8,6 +8,7 @@ import numpy as np
 import librosa
 import torch.nn as nn
 import warnings
+from zipfile import BadZipFile
 
 from util import (
     load_index,
@@ -96,9 +97,13 @@ class NeuralfpDataset(Dataset):
         if self.key_data is None:
             return -1  # Unknown key
 
-        # Extract relative path from full filepath to match key_data format
-        rel_path = "/".join(filepath.split("/")[-2:])  # Gets "091/091869.mp3" format
-        return int(self.key_data.get(rel_path, -1))
+        try:
+            # Extract relative path from full filepath to match key_data format
+            rel_path = "/".join(filepath.split("/")[-2:])  # Gets "091/091869.mp3" format
+            return int(self.key_data.get(rel_path, -1))
+        except (BadZipFile, EOFError):
+            print(f"Warning: Corrupted file {filepath}, returning -1")
+            return -1
 
     def load_beats_file(self, filepath, train=True):
         """Load beats file corresponding to audio file"""
