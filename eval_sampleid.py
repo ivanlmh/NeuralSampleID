@@ -188,6 +188,72 @@ class SampleIDDataset(Dataset):
         return base_audio, sample_audio, metadata
 
 
+class SampleIDDummyDataset(Dataset):
+    """Dataset that loads segments from all the audios starting with the letter N in the samples directory"""
+
+    def __init__(self, audio_dir, sample_length=None, sr=22050):
+        self.audio_dir = audio_dir
+        self.sr = sr
+        self.sample_length = sample_length
+
+        # Load all JSON files from annotations directory
+        audio_files = os.listdir(os.path.join(audio_dir, "audio"))
+        audio_files.sort()
+        print(audio_files[:5])
+        self.audio_files = []
+        for filename in audio_files:
+            if filename.startswith("N"):
+                self.audio_files.append(filename)
+        print(f"Loaded {len(self.audio_files)} audio files")
+
+    def __len__(self):
+        return len(self.audio_files)
+
+    def load_audio(self, filepath, start_time=None, duration=None):
+        try:
+            if start_time is not None and duration is not None:
+                # Load specific segment
+                offset = start_time
+                num_frames = int(duration * self.sr)
+                audio, loaded_sr = torchaudio.load(
+                    filepath, frame_offset=int(offset * self.sr), num_frames=num_frames
+                )
+            else:
+                # Load full file
+                audio, loaded_sr = torchaudio.load(filepath)
+
+            # Convert to mono and resample if needed
+            audio = audio.mean(dim=0)
+            if loaded_sr != self.sr:
+                resampler = torchaudio.transforms.Resample(loaded_sr, self.sr)
+                audio = resampler(audio)
+
+            return audio
+
+        except Exception as e:
+            print(f"Error loading {filepath}: {str(e)}")
+            return None
+
+    def __getitem__(self, idx):
+        audio_file = self.audio_files[idx]
+        audio_filepath = os.path.join(self.audio_dir, "audio", audio_file)
+        audio = self.load_audio(audio_filepath)
+
+        if audio is None:
+            # Return a default item or handle error
+            return torch.zeros(1, int(self.sr * self.sample_length), {})
+
+        # Get a random segment of sample_length seconds
+        start_time = np.random.uniform(
+            0, audio.shape[0] - (self.sr * self.sample_length)
+        )
+        audio = audio[int(start_time) : int(start_time + self.sr * self.sample_length)]
+
+        metadata = {"audio_file": audio_file, "start_time": start_time}
+
+        return audio, audio, metadata
+
+
 def create_embeddings(dataloader, augment, model, output_root_dir, verbose=True):
     """Create embeddings for base and sample audio segments"""
     emb_orig = []
