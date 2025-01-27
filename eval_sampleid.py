@@ -94,35 +94,50 @@ class SampleIDDataset(Dataset):
             return None
 
     def find_sample_window(self, annotation):
-        """Determine the correct audio window to use based on annotation type"""
+        """Find first occurrence/presence in both base and sample annotations"""
         base_times = annotation["base_time_annotations"]
         sample_times = annotation["sample_time_annotations"]
 
-        # Default to first annotation if no type specified
-        if len(sample_times) == 0 or "type" not in sample_times[0]:
-            return base_times[0], sample_times[0]
+        # Find first occurrence/presence in sample annotations
+        sample_segment = None
+        for sample_time in sample_times:
+            sample_type = sample_time.get("type", "").lower()
+            if sample_type in ["occurrence", "presence"]:
+                sample_segment = sample_time
+                break
 
-        sample_type = sample_times[0].get("type", "").lower()
+        # Find first occurrence/presence in base annotations
+        base_segment = None
+        for base_time in base_times:
+            base_type = base_time.get("type", "").lower()
+            if base_type in ["occurrence", "presence"]:
+                base_segment = base_time
+                break
 
-        if "absence" in sample_type:
-            # For absence annotations, find the first non-absence segment after
+        # If no occurrence but has absence in base, take duration after first base absence
+        if base_segment is None:
             for base_time in base_times:
-                if base_time.get("type", "").lower() != "absence":
-                    if base_time["start_time"] > sample_times[0]["end_time"]:
-                        return base_time, {
-                            "start_time": base_time["start_time"],
-                            "end_time": base_time["end_time"],
-                        }
-            # If no valid segment found after absence, use first non-absence segment
-            for base_time in base_times:
-                if base_time.get("type", "").lower() != "absence":
-                    return base_time, {
-                        "start_time": base_time["start_time"],
-                        "end_time": base_time["end_time"],
+                if base_time.get("type", "").lower() == "absence":
+                    end_time = base_time["end_time"]
+                    base_segment = {
+                        "start_time": end_time,
+                        "end_time": end_time + self.sample_length,
                     }
+                    break
 
-        # For occurrence/presence annotations, use the annotated times
-        return base_times[0], sample_times[0]
+        # Default to first annotations if no occurrence/absence found
+        if base_segment is None:
+            print(
+                f"Warning: No base segment found for {annotation['id']}, base annotations are {base_times}"
+            )
+            base_segment = base_times[0]
+        if sample_segment is None:
+            print(
+                f"Warning: No sample segment found for {annotation['id']}, sample annotations are {sample_times}"
+            )
+            sample_segment = sample_times[0]
+
+        return base_segment, sample_segment
 
     def __getitem__(self, idx):
         annotation = self.annotations[idx]
