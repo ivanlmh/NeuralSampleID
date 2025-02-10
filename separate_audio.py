@@ -28,7 +28,7 @@ def check_stems_exist(filepath, output_dir):
     stem_path = os.path.join(output_dir, 'htdemucs', filename)
     return all(os.path.exists(os.path.join(stem_path, f"{stem}.mp3")) for stem in stems)
 
-def process_audio_files(input_dir, output_dir):
+def process_audio_files(input_dir, output_dir, empty_bpm_file):
     """
     Process all audio files in input_dir and its subdirectories using Demucs.
     Uses high quality settings with parallel processing.
@@ -52,18 +52,22 @@ def process_audio_files(input_dir, output_dir):
     collection_start = time.time()
 
     # Open file with empty .bpm files
-    with open("/data/home/eez083/datasets/fma_small/beats/empty_bpm_files.txt", 'r') as f:
+    with open(empty_bpm_file, 'r') as f:
         empty_files = f.readlines()
     empty_files = [f.strip().split("/")[-1].split(".")[0] for f in empty_files]
 
     mp3_files = []
     skipped_files = []
+    corrupted_files = ["001486", "005574", "065753", "080391", "098558", "098559", "098560", "098565", "098566",
+                        "098567", "098568", "098569", "098571", "099134", "105247", "108925", "126981", "127336",
+                        "133297", "143992"]
     for root, dirs, files in os.walk(input_dir):
         for file in files:
             if file.lower().endswith('.mp3'):
                 input_path = os.path.join(root, file)
                 # Skip files that contain specific strings or empty bpm
-                if any(x in input_path for x in empty_files + ["108925", "099134", "133297"]):
+                # if any(x in input_path for x in empty_files + ["108925", "099134", "133297"]): # FOR FMA SMALL
+                if any(x in input_path for x in empty_files + corrupted_files): # FOR FMA MEDIUM
                     skipped_files.append(input_path)
                     continue
                 # Check if stems already exist
@@ -121,7 +125,12 @@ def process_audio_files(input_dir, output_dir):
 if __name__ == "__main__":
     # input_dir = "/data/home/acw723/datasets/fma/fma_small"
     # output_dir = "/data/home/eez083/datasets/fma_small"
-    input_dir = "/data/home/eez083/sample_100/audio"
-    output_dir = "/data/home/eez083/sample_100"
+    # input_dir = "/data/home/eez083/sample_100/audio"
+    # output_dir = "/data/home/eez083/sample_100"
+    input_dir = "/data/EECS-Studiosync/datasets/fma_medium"
+    output_dir = "/data/EECS-Studiosync/datasets/fma_medium"
+
+    # empty_bpm_file = "/data/home/eez083/datasets/fma_small/beats/empty_bpm_files.txt"
+    empty_bpm_file = "/data/home/eez083/datasets/fma_medium/beats/empty_bpm_files.txt"
     
-    process_audio_files(input_dir, output_dir)
+    process_audio_files(input_dir, output_dir, empty_bpm_file)
